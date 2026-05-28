@@ -1,7 +1,6 @@
 // Catálogo y Reglas de Negocio Simuladas (Golden Dataset)
 
 const Catalog = {
-  // Productos B2C (Minoristas)
   b2cProducts: [
     {
       id: "RUN-001",
@@ -10,6 +9,7 @@ const Catalog = {
       price: 180.00,
       stock: 45,
       description: "Zapatillas de running premium con amortiguación Boost de alta densidad, ideales para asfalto.",
+      tags: ["zapatilla", "zapatillas", "running", "correr", "calzado", "asfalto", "amortiguacion", "ciudad", "deporte"],
       specs: {
         peso: "280g",
         drop: "10mm",
@@ -24,11 +24,72 @@ const Catalog = {
       price: 150.00,
       stock: 12,
       description: "Zapatillas de trail running con suela de alta tracción y protección impermeable.",
+      tags: ["zapatilla", "zapatillas", "trail", "montaña", "correr", "calzado", "tierra", "barro", "impermeable", "deporte"],
       specs: {
         peso: "310g",
         drop: "6mm",
         terreno: "Montaña/Tierra",
         amortiguacion: "Media-Alta"
+      }
+    },
+    {
+      id: "FIT-002",
+      name: "FlexTrainer Core",
+      category: "Zapatillas",
+      price: 85.00,
+      stock: 60,
+      description: "Calzado de entrenamiento funcional y gimnasio con suela plana para máxima estabilidad.",
+      tags: ["zapatilla", "zapatillas", "entrenamiento", "gimnasio", "gym", "calzado", "estabilidad", "plana", "crossfit", "deporte"],
+      specs: {
+        peso: "250g",
+        drop: "4mm",
+        uso: "Gimnasio / Funcional",
+        suela: "Goma Grip de Alta Tracción"
+      }
+    },
+    {
+      id: "APP-001",
+      name: "Campera WindBreaker Shield",
+      category: "Indumentaria",
+      price: 95.00,
+      stock: 35,
+      description: "Campera rompevientos ultraliviana, repelente al agua y térmica para entrenar en climas fríos o lluvia.",
+      tags: ["campera", "abrigo", "rompevientos", "lluvia", "impermeable", "frio", "indumentaria", "ropa", "correr", "trekking"],
+      specs: {
+        material: "Poliéster Ripstop 100%",
+        impermeabilidad: "DWR Coating",
+        bolsillos: "3 con cierre reflectivo",
+        peso: "180g"
+      }
+    },
+    {
+      id: "APP-002",
+      name: "DryFit Active Tee",
+      category: "Indumentaria",
+      price: 30.00,
+      stock: 200,
+      description: "Remera deportiva técnica con tecnología de secado rápido y paneles de ventilación lateral.",
+      tags: ["remera", "remeras", "tecnica", "dryfit", "ropa", "indumentaria", "ventilacion", "secado rapido", "entrenamiento"],
+      specs: {
+        material: "Microfibra de Poliéster",
+        tecnologia: "Dri-FIT Respirable",
+        corte: "Athletic Fit",
+        proteccion_uv: "UPF 40+"
+      }
+    },
+    {
+      id: "APP-003",
+      name: "Leggings PowerStretch",
+      category: "Indumentaria",
+      price: 45.00,
+      stock: 90,
+      description: "Calzas deportivas de compresión media con cintura alta y bolsillo lateral porta celular.",
+      tags: ["calza", "calzas", "leggings", "compresion", "indumentaria", "ropa", "gimnasio", "fitness", "yoga"],
+      specs: {
+        material: "80% Nylon, 20% Elastano",
+        compresion: "Media-Alta",
+        cintura: "Alta Antipinchaduras",
+        bolsillos: "1 Lateral elástico"
       }
     },
     {
@@ -38,10 +99,26 @@ const Catalog = {
       price: 99.00,
       stock: 150,
       description: "Smartband con sensor de ritmo cardíaco continuo, GPS integrado y batería de 14 días.",
+      tags: ["reloj", "smartband", "pulsera", "band", "accesorios", "gps", "ritmo", "corazon", "bateria", "tecnologia"],
       specs: {
         bateria: "14 días",
         resistencia: "IP68 (50m)",
         pantalla: "AMOLED 1.62\""
+      }
+    },
+    {
+      id: "TEC-001",
+      name: "Auriculares AeroBuds Sport",
+      category: "Accesorios",
+      price: 120.00,
+      stock: 80,
+      description: "Auriculares inalámbricos deportivos con ganchos de sujeción ergonómicos y cancelación activa de ruido.",
+      tags: ["auriculares", "audifonos", "musica", "bluetooth", "inalambricos", "cancelacion", "ruido", "accesorios", "tecnologia", "deporte"],
+      specs: {
+        autonomia: "8 horas (32h con estuche)",
+        conexion: "Bluetooth 5.3",
+        resistencia: "IPX7 al sudor/agua",
+        drivers: "10mm dinámicos"
       }
     },
     {
@@ -51,10 +128,41 @@ const Catalog = {
       price: 120.00,
       stock: 8,
       description: "Mochila de trekking ergonómica con cobertor de lluvia y soporte para bastones.",
+      tags: ["mochila", "mochilas", "trekking", "montaña", "viaje", "equipamiento", "bolso", "camping", "explorer"],
       specs: {
         capacidad: "45 Litros",
         material: "Nylon Ripstop",
         peso: "1.2kg"
+      }
+    },
+    {
+      id: "OUT-002",
+      name: "Botella ThermoFlask Elite 1L",
+      category: "Equipamiento",
+      price: 35.00,
+      stock: 110,
+      description: "Botella térmica de acero inoxidable de doble pared. Mantiene bebidas frías por 24 horas y calientes por 12 horas.",
+      tags: ["termo", "botella", "termica", "bebida", "agua", "frio", "calor", "acero", "equipamiento", "camping", "outdoor"],
+      specs: {
+        capacidad: "1 Litro",
+        material: "Acero Inoxidable 18/8",
+        aislacion: "Doble pared al vacío",
+        tapa: "A prueba de fugas"
+      }
+    },
+    {
+      id: "OUT-003",
+      name: "Bolsa PolarCamp Sleeping Bag",
+      category: "Equipamiento",
+      price: 110.00,
+      stock: 25,
+      description: "Bolsa de dormir térmica tipo sarcófago para temperaturas extremas de hasta -5°C, ultracompacta.",
+      tags: ["bolsa de dormir", "bolsa dormir", "sleeping", "saco dormir", "camping", "frio", "montaña", "equipamiento", "outdoor"],
+      specs: {
+        rango_temp: "-5°C a 10°C",
+        forma: "Sarcófago ergonómico",
+        relleno: "Fibra sintética 3D",
+        peso: "1.4kg"
       }
     }
   ],

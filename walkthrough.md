@@ -29,13 +29,15 @@ Para abrir y mostrar el simulador:
 2. Arrastra y suelta el archivo [index.html](file:///C:/Users/mljordanoff/.gemini/antigravity/scratch/ecommerce-agent/index.html) en la ventana del navegador (o haz doble clic sobre él en el Explorador de Archivos).
 3. Interactúa con las tres pestañas superiores para hacer las siguientes demostraciones en vivo:
 
-### Escenario 1: Asistente B2C Minorista
-* **Objetivo**: Demostrar cómo se reduce la fricción en la búsqueda, personalizando la oferta y acelerando el checkout.
+### Escenario 1: Asistente B2C Minorista (Búsqueda Dinámica y Catálogo Realista)
+* **Objetivo**: Demostrar cómo el agente interactúa dinámicamente con un catálogo de 11 productos detallados (Calzado, Indumentaria, Accesorios, Equipamiento Outdoor), buscando por tags y filtrando por presupuesto del cliente.
 * **Flujo**:
-  1. Haz clic en las sugerencias como *"Busco zapatillas para correr en asfalto..."* o escribe en el chat.
-  2. Observa cómo el agente devuelve el producto recomendado con su ficha técnica y stock disponible.
-  3. Haz clic en **"Agregar"**. El asistente simula el checkout automático y la compra inmediata.
-  4. **Impacto CFO**: En el dashboard inferior verás cómo la *Conversión B2C* escala del 2.4% al **14.8%** y el *NPS* sube.
+  1. Haz clic en sugerencias como *"Busco calzado cómodo para el gimnasio o funcional"* o escribe en el chat libremente (por ejemplo: *"camperas para lluvia"* o *"relojes inteligentes"*).
+  2. Prueba con un filtro de presupuesto: *"mochila por menos de 130 dólares"* o *"termos por hasta 50 USD"*. El agente filtrará dinámicamente según precios.
+  3. Si la búsqueda arroja **un solo producto**, verás su ficha de especificaciones detallada y stock disponible con el botón **"Agregar"**.
+  4. Si arroja **múltiples coincidencias** (por ejemplo, escribe *"zapatillas"*), el agente mostrará una elegante tarjeta comparativa para que agregues el modelo que prefieras.
+  5. Haz clic en **"Agregar"** en uno o más productos para cargarlos a tu carrito virtual, luego haz clic en **"Proceder al Pago"** para simular la facturación electrónica.
+  6. **Impacto CFO**: En el dashboard inferior, verás cómo la *Conversión B2C* escala del 2.4% al **14.8%** y el *NPS* sube gracias a la recomendación precisa.
 
 ### Escenario 2: Cotizador & Negociador B2B Mayorista
 * **Objetivo**: Mostrar cómo el agente elimina esperas de 48 horas en cotizaciones y protege los márgenes comerciales en las negociaciones de descuento.

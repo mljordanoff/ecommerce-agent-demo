@@ -38,10 +38,10 @@ let state = {
 // Configuración de los Prompts Sugeridos por Modo
 const SUGGESTIONS = {
   b2c: [
-    "Busco zapatillas para correr en asfalto con buena amortiguación",
-    "¿Qué mochila de trekking resistente al agua me recomiendas?",
-    "Tengo presupuesto de $100 USD para un reloj o accesorio deportivo",
-    "¿Tienen stock de la SmartFit Band X?"
+    "Busco calzado cómodo para el gimnasio o funcional",
+    "¿Qué camperas abrigadas o impermeables tienen para correr con frío?",
+    "Quiero ver opciones de tecnología deportiva como auriculares o relojes",
+    "¿Tienen termos de acero inoxidable para camping?"
   ],
   b2b: [
     "Cotizar 50 Notebooks ThinkWork Pro v6",
@@ -53,7 +53,7 @@ const SUGGESTIONS = {
 
 // Mensajes Iniciales de Bienvenida del Agente
 const WELCOME_MESSAGES = {
-  b2c: `¡Hola! 👋 Soy tu <strong>Agente de Compras Personalizado</strong>. Estoy conectado directamente al catálogo y stock en tiempo real. ¿En qué puedo ayudarte hoy? Cuéntame qué estás buscando, tu presupuesto o tus preferencias de uso.`,
+  b2c: `¡Hola! 👋 Soy tu <strong>Agente de Compras Personalizado</strong>. Estoy conectado directamente al catálogo y stock en tiempo real de Baufest. ¿En qué puedo ayudarte hoy? Cuéntame qué estás buscando (zapatillas, camperas, auriculares, termos, mochilas, etc.) o indícame tu presupuesto.`,
   b2b: `Estimado socio corporativo, bienvenido al canal de <strong>Cotización Inteligente B2B</strong>. <br><br>Estoy autorizado para realizar consultas en ERP, verificar niveles de contrato en CRM y **negociar precios de volumen con aprobación inmediata**. ¿Qué productos y cantidades desea cotizar hoy?`
 };
 
@@ -277,70 +277,118 @@ function addTrace(type, title, body) {
 // MOTOR DE DIÁLOGO B2C (Minorista)
 // -------------------------------------------------------------
 function handleB2CInput(text) {
-  const query = text.toLowerCase();
+  const query = text.toLowerCase().trim();
   
   addTrace('interpreta', 'NLP - Interpreta Intención', `Analizando consulta de usuario: "${text}"`);
   
-  // Ver carrito
+  // 1. Ver carrito
   if (query.includes('carrito') || query.includes('mostrar carrito') || query.includes('ver mi carrito')) {
     addTrace('consulta', 'Consulta Carrito B2C', 'Recuperando items activos en el carrito de compras.');
     renderB2CCart();
     return;
   }
 
-  // Checkout
+  // 2. Checkout
   if (query.includes('comprar') || query.includes('pagar') || query.includes('checkout') || query.includes('confirmar')) {
     checkoutB2C();
     return;
   }
   
-  // Saludos
+  // 3. Saludos
   if (query.includes('hola') || query.includes('buen') || query.includes('inicio') || query.includes('empezar')) {
     addTrace('recomienda', 'Saludo Detectado', 'Respondiendo saludo inicial.');
-    appendAgentMessage("¡Hola! 😊 ¿Cómo puedo ayudarte hoy? Estoy aquí para ayudarte a elegir el mejor equipamiento deportivo. Puedes preguntarme por calzado para correr (asfalto o trail), mochilas de montaña o accesorios inteligentes.");
+    appendAgentMessage(`¡Hola! 😊 ¿Cómo puedo ayudarte hoy? Estoy aquí para ayudarte a elegir el mejor equipamiento o indumentaria deportiva. 
+      <br><br>Puedes consultarme por calzado (running, trail, gym), indumentaria (camperas, remeras, calzas), tecnología (auriculares, relojes inteligentes) o equipamiento de camping (mochilas, termos, bolsas de dormir).`);
     return;
   }
 
-  // Ver si consulta catálogo completo
+  // 4. Ver catálogo completo
   if (query.includes('catalogo') || query.includes('productos') || query.includes('que tenes') || query.includes('que venden') || query.includes('lista')) {
     addTrace('consulta', 'Consulta Catálogo Completo', 'Listando todos los productos B2C de la base de datos.');
-    let html = `<p>Actualmente tengo los siguientes productos en oferta minorista B2C:</p><ul>`;
+    let html = `<p>Actualmente tengo los siguientes productos en oferta minorista B2C:</p>
+      <div style="max-height: 200px; overflow-y: auto; margin-top: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; background: rgba(0,0,0,0.15);">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--border-color); color: var(--accent-cyan);">
+            <th style="padding: 0.4rem;">Categoría</th>
+            <th style="padding: 0.4rem;">Producto</th>
+            <th style="padding: 0.4rem; text-align: right;">Precio</th>
+          </tr>
+        </thead>
+        <tbody>`;
+    
     window.Catalog.b2cProducts.forEach(p => {
-      html += `<li><strong>${p.name}</strong> - $${p.price} USD (${p.category})</li>`;
+      html += `<tr style="border-bottom: 1px dashed rgba(255,255,255,0.03);">
+        <td style="padding: 0.4rem; color: var(--text-secondary);">${p.category}</td>
+        <td style="padding: 0.4rem; font-weight: 500;">${p.name}</td>
+        <td style="padding: 0.4rem; text-align: right; color: var(--accent-cyan); font-family: var(--font-mono);">$${p.price.toFixed(2)}</td>
+      </tr>`;
     });
-    html += `</ul><p style="margin-top: 0.5rem;">Dime cuál te interesa y te daré detalles de stock y especificaciones.</p>`;
+    
+    html += `</tbody></table></div><p style="margin-top: 0.5rem;">Dígame cuál le interesa y le daré más detalles y especificaciones.</p>`;
     appendAgentMessage(html);
     return;
   }
 
-  // Redirigir si busca productos B2B corporativos
+  // 5. Redirigir si busca productos B2B corporativos
   if (query.includes('notebook') || query.includes('thinkwork') || query.includes('laptop') || query.includes('portatil') || query.includes('monitor') || query.includes('servidor') || query.includes('cloudbox') || query.includes('mayorista') || query.includes('b2b')) {
     addTrace('alerta', 'Guardrail - Intención B2B', 'Se detectó búsqueda de productos corporativos/B2B en el canal minorista B2C.');
     appendAgentMessage(`💼 **Canal de Compras Corporativas (B2B)**<br>Veo que estás buscando equipos tecnológicos o compras al por mayor (Notebooks, Monitores o Servidores).<br><br>Por favor, **haz clic en la pestaña "B2B Mayorista"** en la parte superior para acceder al cotizador automático y al negociador de descuentos de volumen.`);
     return;
   }
-  
-  // Caso de uso: Zapatillas
-  if (query.includes('zapatilla') || query.includes('correr') || query.includes('running') || query.includes('speed') || query.includes('ultraboost') || query.includes('calzado') || query.includes('tenis') || query.includes('zapas')) {
-    addTrace('consulta', 'Consulta ERP & OMS', 'Buscando categorías relativas a Calzado Deportivo. Validando stock de talles.');
-    
-    let selected = null;
-    let details = "";
-    
-    if (query.includes('asfalto') || query.includes('amortiguación') || query.includes('ciudad') || !query.includes('montaña') && !query.includes('trail') && !query.includes('tierra')) {
-      selected = window.Catalog.b2cProducts.find(p => p.id === 'RUN-001');
-      details = `Aquí tienes las **${selected.name}**. Son ideales para amortiguación alta en superficies duras como asfalto. Quedan **${selected.stock} unidades** disponibles en nuestro almacén central.`;
-    } else {
-      selected = window.Catalog.b2cProducts.find(p => p.id === 'RUN-002');
-      details = `Para terrenos difíciles de montaña o senderos, te recomiendo las **${selected.name}**. Tienen suela con tracción especial y protección impermeable. Contamos con **${selected.stock} unidades** en stock.`;
-    }
 
-    addTrace('recomienda', 'Sugerencia Contextual', `Recomendado producto ID: ${selected.id} en base a condiciones de uso.`);
+  // 6. Ejecutar Búsqueda y Filtro de Presupuesto
+  let maxPrice = null;
+  const priceMatch = query.match(/(?:presupuesto|precio|hasta|dolares|usd|\$)\s*(\d+)/i) || query.match(/(\d+)\s*(?:dolares|usd|dólares)/i);
+  if (priceMatch) {
+    maxPrice = parseInt(priceMatch[1]);
+    addTrace('interpreta', 'Filtro de Presupuesto', `Detectado límite de precio: $${maxPrice} USD`);
+  }
+
+  let matchedProducts = searchB2CProducts(query);
+
+  if (maxPrice !== null) {
+    if (matchedProducts.length > 0) {
+      matchedProducts = matchedProducts.filter(p => p.price <= maxPrice);
+    } else {
+      matchedProducts = window.Catalog.b2cProducts.filter(p => p.price <= maxPrice);
+    }
+  }
+
+  // 7. Renderizar Respuestas
+  if (matchedProducts.length === 0) {
+    addTrace('consulta', 'Motor RAG Fallback', 'No se encontraron coincidencias para la búsqueda.');
+    let msg = `No encontré ningún producto que coincida exactamente con tu búsqueda`;
+    if (maxPrice !== null) msg += ` por menos de $${maxPrice} USD`;
+    msg += `.<br><br>Contamos con calzado deportivo, remeras, calzas, camperas cortavientos, mochilas, botellas térmicas y tecnología deportiva. ¿Te gustaría afinar tu búsqueda o escribir **'ver catalogo'**?`;
+    appendAgentMessage(msg);
+    return;
+  }
+
+  // Si hay una única coincidencia
+  if (matchedProducts.length === 1) {
+    const selected = matchedProducts[0];
+    addTrace('recomienda', 'Recomendación Única', `Presentando ficha de producto para ${selected.id} (Score alto).`);
     
+    let specsHtml = "";
+    Object.keys(selected.specs).forEach(key => {
+      specsHtml += `<br>• **${key.charAt(0).toUpperCase() + key.slice(1)}**: ${selected.specs[key]}`;
+    });
+
+    let icon = "fa-cubes";
+    if (selected.category === "Zapatillas") icon = "fa-shoe-prints";
+    if (selected.category === "Indumentaria") icon = "fa-shirt";
+    if (selected.category === "Accesorios") icon = "fa-clock";
+    if (selected.category === "Equipamiento") icon = "fa-backpack";
+
     let html = `
-      <p>${details}</p>
-      <div class="product-card-preview">
-        <div class="product-img-placeholder"><i class="fa-solid fa-shoe-prints"></i></div>
+      <p>Te recomiendo la / el <strong>${selected.name}</strong> (${selected.category}). 
+      Es ideal para lo que buscas. Nos quedan **${selected.stock} unidades** en stock central.
+      <br><br>
+      <strong>Especificaciones:</strong>${specsHtml}
+      </p>
+      <div class="product-card-preview" style="margin-top: 0.8rem;">
+        <div class="product-img-placeholder"><i class="fa-solid ${icon}"></i></div>
         <div class="product-info-mini">
           <div class="product-name-mini">${selected.name}</div>
           <div class="product-price-mini">$${selected.price.toFixed(2)} USD</div>
@@ -348,57 +396,82 @@ function handleB2CInput(text) {
         <button class="send-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="simulateB2CCartAdd('${selected.name}', ${selected.price})">Agregar</button>
       </div>
     `;
-    
     appendAgentMessage(html);
-    updateCFOkpis({ conversion: 8.5 }); // Impacto parcial en conversión
+    updateCFOkpis({ conversion: Math.min(25.0, state.kpis.conversion + 1.2) });
     return;
   }
 
-  // Caso de uso: Mochila
-  if (query.includes('mochila') || query.includes('trekking') || query.includes('explorer') || query.includes('bolso') || query.includes('acampada')) {
-    addTrace('consulta', 'Consulta Catálogo', 'Buscando artículos de Outdoor / Equipamiento.');
-    const backpack = window.Catalog.b2cProducts.find(p => p.id === 'OUT-001');
-    addTrace('recomienda', 'Recomendación Algorítmica', 'Sugerido Mochila Explorer 45L basado en mochila/trekking.');
-    
-    let html = `
-      <p>Excelente opción para excursiones. La <strong>${backpack.name}</strong> tiene una capacidad de ${backpack.specs.capacidad} y está fabricada en ${backpack.specs.material}. Nos quedan solo <strong>${backpack.stock} unidades</strong> en stock.</p>
-      <div class="product-card-preview">
-        <div class="product-img-placeholder"><i class="fa-solid fa-backpack"></i></div>
+  // Si hay múltiples coincidencias
+  addTrace('recomienda', 'Recomendación Comparativa', `Mostrando lista de ${matchedProducts.length} productos coincidentes.`);
+  let html = `<p>Encontré varias opciones excelentes que coinciden con tu búsqueda:</p>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; max-height: 200px; overflow-y: auto; padding-right: 0.25rem;">`;
+
+  matchedProducts.forEach(selected => {
+    let icon = "fa-cubes";
+    if (selected.category === "Zapatillas") icon = "fa-shoe-prints";
+    if (selected.category === "Indumentaria") icon = "fa-shirt";
+    if (selected.category === "Accesorios") icon = "fa-clock";
+    if (selected.category === "Equipamiento") icon = "fa-backpack";
+
+    html += `
+      <div class="product-card-preview" style="margin-top: 0;">
+        <div class="product-img-placeholder" style="width: 40px; height: 40px; font-size: 1rem;"><i class="fa-solid ${icon}"></i></div>
         <div class="product-info-mini">
-          <div class="product-name-mini">${backpack.name}</div>
-          <div class="product-price-mini">$${backpack.price.toFixed(2)} USD</div>
+          <div class="product-name-mini" style="font-size: 0.8rem;">${selected.name} <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal;">(${selected.category})</span></div>
+          <div class="product-price-mini" style="font-size: 0.75rem;">$${selected.price.toFixed(2)} USD - Stock: ${selected.stock}</div>
         </div>
-        <button class="send-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="simulateB2CCartAdd('${backpack.name}', ${backpack.price})">Agregar</button>
+        <button class="send-btn" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="simulateB2CCartAdd('${selected.name}', ${selected.price})">Agregar</button>
       </div>
     `;
-    appendAgentMessage(html);
-    return;
-  }
+  });
 
-  // Caso de uso: Presupuesto o Reloj
-  if (query.includes('reloj') || query.includes('smartband') || query.includes('accesorio') || query.includes('presupuesto') || query.includes('100') || query.includes('fit') || query.includes('band') || query.includes('pulsera')) {
-    addTrace('consulta', 'Consulta ERP & Filtros', 'Filtro por rango de precio: <= $120 USD.');
-    const band = window.Catalog.b2cProducts.find(p => p.id === 'FIT-001');
-    addTrace('recomienda', 'Recomendación Cruzada', 'Sugerido SmartFit Band X por precio e intenciones de accesorio.');
+  html += `</div><p style="margin-top: 0.5rem; font-size: 0.85rem;">¿Deseas detalles sobre alguno en particular? Pregúntame, por ejemplo: *"Detalles del ${matchedProducts[0].name}"*.</p>`;
+  appendAgentMessage(html);
+  updateCFOkpis({ conversion: Math.min(25.0, state.kpis.conversion + 0.5) });
+}
+
+// Buscar productos B2C de manera dinámica basándose en keywords/tags de la consulta
+function searchB2CProducts(query) {
+  const words = query.split(/\s+/).filter(w => w.length > 2);
+  let matches = [];
+
+  window.Catalog.b2cProducts.forEach(product => {
+    let score = 0;
     
-    let html = `
-      <p>Bajo ese presupuesto, la <strong>${band.name}</strong> es tu mejor opción por $${band.price} USD. Ofrece pantalla ${band.specs.pantalla} y tiene una autonomía de ${band.specs.bateria}.</p>
-      <div class="product-card-preview">
-        <div class="product-img-placeholder"><i class="fa-solid fa-clock"></i></div>
-        <div class="product-info-mini">
-          <div class="product-name-mini">${band.name}</div>
-          <div class="product-price-mini">$${band.price.toFixed(2)} USD</div>
-        </div>
-        <button class="send-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="simulateB2CCartAdd('${band.name}', ${band.price})">Agregar</button>
-      </div>
-    `;
-    appendAgentMessage(html);
-    return;
-  }
+    // Coincidencia exacta de nombre (peso alto)
+    if (product.name.toLowerCase().includes(query)) {
+      score += 10;
+    }
+    
+    // Coincidencia exacta de categoría (peso alto)
+    if (product.category.toLowerCase().includes(query) || query.includes(product.category.toLowerCase())) {
+      score += 8;
+    }
 
-  // Fallback
-  addTrace('consulta', 'Motor RAG Fallback', 'Consulta vaga. Listando categorías principales para guiar la intención.');
-  appendAgentMessage("No comprendí exactamente cuál de nuestros productos deportivos deseas. Contamos con calzado especializado (Zapatillas UltraBoost y SpeedTrail), mochilas (Mochila Explorer) y relojes inteligentes (SmartFit Band X). Escribe **'ver catalogo'** si deseas listar todas nuestras ofertas.");
+    // Coincidencias individuales de palabras
+    words.forEach(word => {
+      // Coincidencia en tags
+      if (product.tags && product.tags.some(tag => tag === word || tag.includes(word))) {
+        score += 3;
+      }
+      // Coincidencia en nombre
+      if (product.name.toLowerCase().includes(word)) {
+        score += 2;
+      }
+      // Coincidencia en descripción
+      if (product.description.toLowerCase().includes(word)) {
+        score += 1;
+      }
+    });
+
+    if (score > 0) {
+      matches.push({ product, score });
+    }
+  });
+
+  // Ordenar por score descendente
+  matches.sort((a, b) => b.score - a.score);
+  return matches.map(m => m.product);
 }
 
 // Simular agregado al carrito B2C y desglose
