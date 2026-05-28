@@ -95,7 +95,31 @@
           <canvas id="warehouse-canvas"></canvas>
         </div>
 
-        <div class="chat-input-area" style="border: none; padding-top: 0;">
+        <!-- Leyenda del Almacén -->
+        <div class="warehouse-legend" style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: #00d2ff; border-radius: 50%; border: 1px solid #fff;"></span>
+            <span>Picker Bot</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: #f59e0b; border-radius: 50%; border: 1px solid var(--warning);"></span>
+            <span>Ítem Pendiente</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: rgba(16, 185, 129, 0.4); border-radius: 50%; border: 1px solid var(--success);"></span>
+            <span>Ítem Recolectado</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="display: inline-block; width: 16px; height: 10px; background: #1e293b; border: 1px solid #334155; border-radius: 2px;"></span>
+            <span>Estanterías (Racks)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="display: inline-block; width: 15px; height: 2px; background: rgba(0, 210, 255, 0.6);"></span>
+            <span>Ruta de Picking</span>
+          </div>
+        </div>
+
+        <div class="chat-input-area" style="border: none; padding-top: 0; margin-top: 0;">
           <button class="send-btn" style="background: var(--accent-blue); color: white;" onclick="startPickingDemo()">
             <i class="fa-solid fa-route"></i> Simular Picking Óptimo
           </button>
@@ -118,8 +142,18 @@
           <i class="fa-solid fa-brain" style="color: var(--text-muted); font-size: 0.7rem;"></i> Procesos de razonamiento, consultas a base de datos y ejecución de reglas del Agente en tiempo real.
         </div>
       </div>
-      <div class="trace-logger" id="trace-logger">
-        <!-- Trazas operativas del agente cargadas dinámicamente -->
+      <div class="trace-logger" id="trace-logger" style="flex: 1; min-height: 0;">
+        <!-- Trazas operativas del agente cargadas dinámidamente -->
+      </div>
+
+      <!-- Leyenda de Trazas del Agente -->
+      <div class="trace-legend" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-sans); flex-shrink: 0;">
+        <div style="display: flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-brain" style="color: var(--accent-purple); font-size: 0.8rem; width: 12px; text-align: center;"></i> <span style="font-size: 0.7rem;">Interpreta</span></div>
+        <div style="display: flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-database" style="color: var(--accent-blue); font-size: 0.8rem; width: 12px; text-align: center;"></i> <span style="font-size: 0.7rem;">Consulta</span></div>
+        <div style="display: flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent-cyan); font-size: 0.8rem; width: 12px; text-align: center;"></i> <span style="font-size: 0.7rem;">Recomienda</span></div>
+        <div style="display: flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-handshake" style="color: var(--warning); font-size: 0.8rem; width: 12px; text-align: center;"></i> <span style="font-size: 0.7rem;">Negocia</span></div>
+        <div style="display: flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-check-double" style="color: var(--success); font-size: 0.8rem; width: 12px; text-align: center;"></i> <span style="font-size: 0.7rem;">Ejecuta</span></div>
+        <div style="display: flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-triangle-exclamation" style="color: var(--danger); font-size: 0.8rem; width: 12px; text-align: center;"></i> <span style="font-size: 0.7rem;">Alerta</span></div>
       </div>
     </section>
 
