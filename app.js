@@ -892,14 +892,14 @@ function drawWarehouseGrid(path) {
   }
 
   // Dibujar Etiquetas de Bahías (Texto de apoyo)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.font = '500 10px var(--font-sans)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.font = '500 9px var(--font-sans)';
   ctx.textAlign = 'center';
-  ctx.fillText('Bahía Despacho', w/2, h/2 - 12);
-  ctx.fillText('Dock Devoluciones', w/2, canvas.height - h/2 + 20);
+  ctx.fillText('Bahía Despacho', w/2, h/2 + 15); // Movido abajo del punto de inicio para evitar traslape
+  ctx.fillText('Dock Devoluciones', w/2, canvas.height - h/2 + 15);
 
   // Dibujar Nombres de Estanterías (Pasillos / Categorías de productos)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.fillStyle = '#38bdf8'; // Celeste brillante muy legible en fondo oscuro
   ctx.font = 'bold 8.5px var(--font-sans)';
   ctx.fillText('ESTANTE A (Calzado)', 1 * w, 15);
   ctx.fillText('ESTANTE B (Outdoor)', 3 * w, 15);
