@@ -1,9 +1,9 @@
 // Lógica del Simulador del Agente de E-Commerce (baufest 2026)
 
 const DEFAULT_ORDERS = [
-  { id: "ORD-10492", time: "Hoy 08:30", channel: "B2C", client: "g.gomez@gmail.com", items: "1x SpeedTrail Pro", total: 150.00, status: "Facturado" },
-  { id: "ORD-10493", time: "Hoy 09:15", channel: "B2B", client: "Global Tech Solutions", items: "15x FlexMonitor 24\"", total: 2619.00, status: "En Proceso" },
-  { id: "ORD-10494", time: "Hoy 10:02", channel: "B2C", client: "m.rodriguez@gmail.com", items: "1x UltraBoost Nova 2026", total: 180.00, status: "Facturado" }
+  { id: "ORD-10492", time: "Hoy 08:30", channel: "B2C", client: "g.gomez@gmail.com", email: "g.gomez@gmail.com", items: "1x SpeedTrail Pro", total: 150.00, status: "Facturado" },
+  { id: "ORD-10493", time: "Hoy 09:15", channel: "B2B", client: "Global Tech Solutions", email: "billing@globaltech.com", items: "15x FlexMonitor 24\"", total: 2619.00, status: "En Proceso" },
+  { id: "ORD-10494", time: "Hoy 10:02", channel: "B2C", client: "m.rodriguez@gmail.com", email: "m.rodriguez@gmail.com", items: "1x UltraBoost Nova 2026", total: 180.00, status: "Facturado" }
 ];
 
 // Estado Global de la Simulación
@@ -567,7 +567,7 @@ function checkoutB2C() {
     
     // Registrar la orden en la base de datos simulada
     const itemsList = state.b2cCart.map(item => `${item.quantity}x ${item.name}`).join(", ");
-    registerOrder("B2C", "mljordanoff@baufest.com", itemsList, total);
+    registerOrder("B2C", "mljordanoff@baufest.com", itemsList, total, "Facturado", "ORD", "mljordanoff@baufest.com");
 
     // Vaciar carrito
     state.b2cCart = [];
@@ -892,13 +892,9 @@ function executeB2BNegotiation(requestedDiscount) {
 // Aprobación final y envío al ERP
 function approveB2BQuote(quoteNum, total) {
   const clientInfo = window.Catalog.b2bClients[state.b2b.clientKey];
-  // Mapeo de correos según la cuenta seleccionada
-  const emails = {
-    "CLI-GLOBAL-TECH": "billing@globaltech.com",
-    "CLI-PAPYRUS-INC": "compras@papyrus.com",
-    "CLI-STARTUP-NEX": "finanzas@nexus.com"
-  };
-  const email = emails[state.b2b.clientKey] || "administracion@empresa.com";
+  // Leer el correo del input en el DOM si existe, sino usar el mapeo por defecto
+  const emailInput = document.getElementById('b2b-email-input');
+  const email = emailInput ? emailInput.value.trim() : "mljordanoff@baufest.com";
 
   addTrace('ejecuta', 'Agente -> Sistema (ERP)', `Enviando orden de compra generada de cotización ${quoteNum} al ERP para facturación y asignación de stock.`);
   appendSystemAlert(`Enviando Orden de Compra al ERP...`);
@@ -908,7 +904,7 @@ function approveB2BQuote(quoteNum, total) {
     appendAgentMessage(`🎉 **¡Orden Confirmada!** Hemos generado la orden de compra en tu ERP. Los equipos están reservados en el almacén. La factura electrónica ha sido enviada al correo registrado de la cuenta: **${email}**.`);
     
     // Registrar la orden en la base de datos simulada
-    registerOrder("B2B", clientInfo.name, `${state.b2b.quantity}x ${state.b2b.activeProduct.name}`, total);
+    registerOrder("B2B", clientInfo.name, `${state.b2b.quantity}x ${state.b2b.activeProduct.name}`, total, "Facturado", "ORD", email);
 
     updateCFOkpis({ 
       conversion: 18.5, 
@@ -1182,7 +1178,12 @@ function startReturnsDemo() {
       addTrace('ejecuta', 'Devolución Completada', `Producto ${chosenItem.name} reintegrado al inventario físico en ${chosenItem.shelfName} (Fila ${randomRow}) y disponible para la venta.`);
       
       // Registrar la devolución en la base de datos simulada (monto negativo, prefijo RET y estado Devuelto)
-      registerOrder(chosenItem.channel, chosenItem.client, `1x ${chosenItem.name} (Devolución)`, -chosenItem.price, "Devuelto", "RET");
+      let returnEmail = chosenItem.client;
+      if (chosenItem.channel === 'B2B') {
+        const emailInput = document.getElementById('b2b-email-input');
+        returnEmail = emailInput ? emailInput.value.trim() : "mljordanoff@baufest.com";
+      }
+      registerOrder(chosenItem.channel, chosenItem.client, `1x ${chosenItem.name} (Devolución)`, -chosenItem.price, "Devuelto", "RET", returnEmail);
       
       updateCFOkpis({ nps: 78 }); // Sube el NPS por posventa proactiva y veloz
       return;
@@ -1298,7 +1299,7 @@ function updateCFOkpis(newKpis) {
 // =============================================================
 
 // Registrar una nueva orden en la base de datos
-function registerOrder(channel, client, items, total, status = "Facturado", idPrefix = "ORD") {
+function registerOrder(channel, client, items, total, status = "Facturado", idPrefix = "ORD", email = "") {
   const orderId = `${idPrefix}-${Math.floor(10500 + Math.random() * 9000)}`;
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -1309,6 +1310,7 @@ function registerOrder(channel, client, items, total, status = "Facturado", idPr
     time: `Hoy ${timeStr}`,
     channel: channel,
     client: client,
+    email: email || client, // Guardar el email del comprador
     items: items,
     total: total,
     status: status,
@@ -1391,25 +1393,8 @@ function showInvoiceDetails(orderId) {
   const vat = totalAbs - subtotal;
 
   // Correo del receptor
-  let clientEmail = order.client;
   let clientName = order.client;
-  if (order.channel === 'B2B') {
-    const clientKey = Object.keys(window.Catalog.b2bClients).find(key => {
-      const c = window.Catalog.b2bClients[key];
-      return c.name === order.client || order.client.includes(c.name) || c.name.includes(order.client);
-    });
-    if (clientKey) {
-      clientName = window.Catalog.b2bClients[clientKey].name;
-      const emails = {
-        "CLI-GLOBAL-TECH": "billing@globaltech.com",
-        "CLI-PAPYRUS-INC": "compras@papyrus.com",
-        "CLI-STARTUP-NEX": "finanzas@nexus.com"
-      };
-      clientEmail = emails[clientKey];
-    } else {
-      clientEmail = "administracion@empresa.com";
-    }
-  }
+  let clientEmail = order.email || order.client;
 
   // CAE Vencimiento (10 días después de hoy)
   const today = new Date();
