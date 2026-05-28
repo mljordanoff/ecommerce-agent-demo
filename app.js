@@ -1085,7 +1085,12 @@ function startReturnsDemo() {
     if (pointIndex >= routePoints.length) {
       isPicking = false;
       document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: var(--success);">Listo</span>`;
+      
       addTrace('ejecuta', 'Devolución Completada', 'Producto devuelto reintegrado al inventario físico en estantería (R-05-F2) y disponible para la venta.');
+      
+      // Registrar la devolución en la base de datos simulada (monto negativo, prefijo RET y estado Devuelto)
+      registerOrder("B2C", "mljordanoff@baufest.com", "1x SpeedTrail Pro (Devolución)", -150.00, "Devuelto", "RET");
+      
       updateCFOkpis({ nps: 78 }); // Sube el NPS por posventa proactiva y veloz
       return;
     }
@@ -1200,8 +1205,8 @@ function updateCFOkpis(newKpis) {
 // =============================================================
 
 // Registrar una nueva orden en la base de datos
-function registerOrder(channel, client, items, total) {
-  const orderId = `ORD-${Math.floor(10500 + Math.random() * 9000)}`;
+function registerOrder(channel, client, items, total, status = "Facturado", idPrefix = "ORD") {
+  const orderId = `${idPrefix}-${Math.floor(10500 + Math.random() * 9000)}`;
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
   
@@ -1213,7 +1218,7 @@ function registerOrder(channel, client, items, total) {
     client: client,
     items: items,
     total: total,
-    status: "Facturado",
+    status: status,
     isNew: true // Flag para activar la animación de resalte
   });
 
@@ -1240,14 +1245,24 @@ function renderOrdersTable() {
       order.isNew = false; // Resetear para futuros renders
     }
     
+    // Configurar clase y contenido del estado de manera dinámica
+    const isRefund = order.status === "Devuelto" || order.status === "Nota de Crédito";
+    const statusClass = isRefund ? "status-refund" : "status-ok";
+    const statusIcon = isRefund ? "fa-rotate-left" : "fa-check";
+    
+    // Configurar color y formato del total
+    const isNegative = order.total < 0;
+    const totalColor = isNegative ? "var(--warning)" : "var(--success)";
+    const totalStr = isNegative ? `-$${Math.abs(order.total).toFixed(2)}` : `$${order.total.toFixed(2)}`;
+    
     tr.innerHTML = `
       <td style="font-family: var(--font-mono); font-weight: 600;">${order.id}</td>
       <td>${order.time}</td>
       <td><span class="db-badge ${order.channel.toLowerCase()}">${order.channel}</span></td>
       <td><strong>${order.client}</strong></td>
       <td style="font-size: 0.8rem; color: var(--text-secondary);">${order.items}</td>
-      <td style="font-weight: 600; color: var(--success);">$${order.total.toFixed(2)}</td>
-      <td><span class="db-badge status-ok"><i class="fa-solid fa-check"></i> ${order.status}</span></td>
+      <td style="font-weight: 600; color: ${totalColor};">${totalStr}</td>
+      <td><span class="db-badge ${statusClass}"><i class="fa-solid fa-${statusIcon}"></i> ${order.status}</span></td>
     `;
     body.appendChild(tr);
   });
