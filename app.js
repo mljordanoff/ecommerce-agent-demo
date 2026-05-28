@@ -452,7 +452,7 @@ function checkoutB2C() {
     addTrace('ejecuta', 'Transacción ERP/OMS', `Generando orden de venta en ERP por $${total.toFixed(2)} USD. Pago aprobado.`);
     addTrace('ejecuta', 'Registro en CRM', 'Orden registrada con éxito. Estado: Completada.');
 
-    appendAgentMessage(`🚀 **¡Compra finalizada con éxito!** Se ha procesado tu orden por un total de **$${total.toFixed(2)} USD**. Tu pedido ya se está preparando en el centro de distribución.`);
+    appendAgentMessage(`🚀 **¡Compra finalizada con éxito!** Se ha procesado tu orden por un total de **$${total.toFixed(2)} USD**. Tu pedido ya se está preparando en el centro de distribución. El comprobante y la factura electrónica fueron enviados a tu correo: **mljordanoff@baufest.com**.`);
     
     // Vaciar carrito
     state.b2cCart = [];
@@ -708,12 +708,20 @@ function executeB2BNegotiation(requestedDiscount) {
 
 // Aprobación final y envío al ERP
 function approveB2BQuote(quoteNum, total) {
+  // Mapeo de correos según la cuenta seleccionada
+  const emails = {
+    "CLI-GLOBAL-TECH": "billing@globaltech.com",
+    "CLI-PAPYRUS-INC": "compras@papyrus.com",
+    "CLI-STARTUP-NEX": "finanzas@nexus.com"
+  };
+  const email = emails[state.b2b.clientKey] || "administracion@empresa.com";
+
   addTrace('ejecuta', 'Agente -> Sistema (ERP)', `Enviando orden de compra generada de cotización ${quoteNum} al ERP para facturación y asignación de stock.`);
   appendSystemAlert(`Enviando Orden de Compra al ERP...`);
   
   setTimeout(() => {
     addTrace('ejecuta', 'Fulfillment Trigger', `Notificando a Sistema de Almacén (WMS) para preparar el envío de la orden.`);
-    appendAgentMessage(`🎉 **¡Orden Confirmada!** Hemos generado la orden de compra en tu ERP. Los equipos están reservados en el almacén. Recibirás la factura de manera electrónica.`);
+    appendAgentMessage(`🎉 **¡Orden Confirmada!** Hemos generado la orden de compra en tu ERP. Los equipos están reservados en el almacén. La factura electrónica ha sido enviada al correo registrado de la cuenta: **${email}**.`);
     
     updateCFOkpis({ 
       conversion: 18.5, 
