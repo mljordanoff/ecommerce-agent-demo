@@ -891,6 +891,13 @@ function drawWarehouseGrid(path) {
     }
   }
 
+  // Dibujar Etiquetas de Bahías (Texto de apoyo)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.font = '500 10px var(--font-sans)';
+  ctx.textAlign = 'center';
+  ctx.fillText('Bahía Despacho', w/2, h/2 - 12);
+  ctx.fillText('Dock Devoluciones', w/2, canvas.height - h/2 + 20);
+
   // Dibujar Ruta de Picking si existe
   if (path && path.length > 0) {
     ctx.strokeStyle = 'rgba(0, 210, 255, 0.6)';
@@ -903,14 +910,18 @@ function drawWarehouseGrid(path) {
     ctx.stroke();
   }
 
-  // Dibujar Ítems a recolectar
+  // Dibujar Ítems a recolectar / devolver
   pickItems.forEach(item => {
-    ctx.fillStyle = item.collected ? 'rgba(16, 185, 129, 0.4)' : '#f59e0b';
+    if (item.isReturn) {
+      ctx.fillStyle = item.collected ? 'rgba(217, 70, 239, 0.3)' : '#d946ef';
+      ctx.strokeStyle = 'var(--accent-purple)';
+    } else {
+      ctx.fillStyle = item.collected ? 'rgba(16, 185, 129, 0.3)' : '#f59e0b';
+      ctx.strokeStyle = item.collected ? 'var(--success)' : 'var(--warning)';
+    }
     ctx.beginPath();
     ctx.arc(item.x, item.y, 6, 0, Math.PI * 2);
     ctx.fill();
-    // Borde brillante
-    ctx.strokeStyle = item.collected ? 'var(--success)' : 'var(--warning)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
   });
@@ -1031,15 +1042,87 @@ function startPickingDemo() {
 // Simular Procesamiento Automatizado de Devoluciones (Excepciones logísticas)
 function startReturnsDemo() {
   if (isPicking) return;
+  isPicking = true;
   
+  document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); color: var(--accent-purple);">Procesando Retorno...</span>`;
+  
+  const cols = 8;
+  const rows = 4;
+  const w = canvas.width / (cols + 1);
+  const h = canvas.height / (rows + 1);
+
+  // Posición inicial del bot (Bahía de salida)
+  pickingBot = { x: w/2, y: h/2 };
+  
+  // Definir la bahía de recepción (Dock de Devoluciones) y la estantería de restock
+  const returnDock = { x: w/2, y: canvas.height - h/2 };
+  const restockShelf = { x: 5 * w - w/2, y: 2 * h }; // Fila 2, pasillo de la col 5
+  
+  // Representar el ítem retornado en el Dock (magenta)
+  pickItems = [{
+    id: 99,
+    x: returnDock.x,
+    y: returnDock.y,
+    collected: false,
+    isReturn: true
+  }];
+
+  // Definir los puntos de la ruta
+  routePoints = [
+    { x: pickingBot.x, y: pickingBot.y }, // Inicio (Salida)
+    { x: returnDock.x, y: returnDock.y }, // Bahía de Devoluciones
+    { x: restockShelf.x, y: restockShelf.y }, // Estante de Restock
+    { x: w/2, y: h/2 } // Retorno a base
+  ];
+
   addTrace('interpreta', 'Recepción de Devolución', 'Cliente B2C solicita devolución de producto RUN-001 por talle incorrecto.');
   addTrace('consulta', 'OMS & Política de Retornos', 'Validando plazo de compra (14 días). Compra realizada hace 3 días. Permitido.');
   addTrace('ejecuta', 'Generación de RMA', 'Generando ticket de retorno automatizado. Notificando a correo del cliente.');
+
+  let pointIndex = 0;
   
-  setTimeout(() => {
-    addTrace('ejecuta', 'Actualización de Inventario', 'Agente instruye al WMS a reservar un casillero para restock del producto retornado. Stock incrementado.');
-    updateCFOkpis({ nps: 78 }); // Sube el NPS por posventa proactiva y veloz
-  }, 1500);
+  function animate() {
+    if (pointIndex >= routePoints.length) {
+      isPicking = false;
+      document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: var(--success);">Listo</span>`;
+      addTrace('ejecuta', 'Devolución Completada', 'Producto devuelto reintegrado al inventario físico en estantería (R-05-F2) y disponible para la venta.');
+      updateCFOkpis({ nps: 78 }); // Sube el NPS por posventa proactiva y veloz
+      return;
+    }
+
+    const target = routePoints[pointIndex];
+    const dx = target.x - pickingBot.x;
+    const dy = target.y - pickingBot.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < 4) {
+      pickingBot.x = target.x;
+      pickingBot.y = target.y;
+      
+      // Acciones específicas en los puntos
+      if (pointIndex === 1) { // Llegó al dock a retirar el producto
+        const item = pickItems.find(i => i.isReturn);
+        if (item && !item.collected) {
+          item.collected = true;
+          addTrace('ejecuta', 'Recepción en Dock', 'Robot recolectó el producto retornado en la bahía de carga.');
+        }
+      } else if (pointIndex === 2) { // Llegó a la estantería a colocar el producto
+        addTrace('ejecuta', 'Restock en Estantería', 'Robot colocó el producto en la estantería de destino. Casillero R-05-F2 actualizado en WMS y stock incrementado.');
+        pickItems = []; // Limpiar para que desaparezca
+      }
+      
+      pointIndex++;
+    } else {
+      // Mover hacia el objetivo
+      pickingBot.x += (dx / dist) * 3;
+      pickingBot.y += (dy / dist) * 3;
+    }
+
+    drawWarehouseGrid(routePoints.slice(0, pointIndex + 1));
+    animationFrameId = requestAnimationFrame(animate);
+  }
+
+  animate();
 }
 
 // -------------------------------------------------------------
