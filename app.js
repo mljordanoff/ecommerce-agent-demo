@@ -16,6 +16,7 @@ let state = {
     clientKey: 'CLI-GLOBAL-TECH',
     role: 'decisor',
     activeProduct: null,
+    pendingProduct: null, // Guardar producto mencionado para cuando digan solo la cantidad
     quantity: 0,
     listPrice: 0,
     currentDiscount: 0.05, // descuento base inicial
@@ -511,23 +512,18 @@ function handleB2BInput(text) {
   const query = text.toLowerCase();
   addTrace('interpreta', 'NLP B2B - Interpreta Rol & Intención', `Analizando consulta corporativa: "${text}" bajo rol de [${state.b2b.role.toUpperCase()}]`);
 
-  // Identificar Productos y Cantidades
-  let selected = null;
-  let qty = 0;
+  // Identificar si hay números/cantidad en este mensaje
+  const matchNumber = query.match(/(\d+)/);
+  const parsedNumber = matchNumber ? parseInt(matchNumber[1]) : 0;
 
+  // Identificar si se menciona algún producto
+  let productMentioned = null;
   if (query.includes('notebook') || query.includes('thinkwork') || query.includes('portatil') || query.includes('laptop')) {
-    selected = window.Catalog.b2bProducts.find(p => p.id === 'B2B-LAP-01');
-    // Regex para extraer cantidad
-    const match = query.match(/(\d+)/);
-    qty = match ? parseInt(match[1]) : 50;
+    productMentioned = window.Catalog.b2bProducts.find(p => p.id === 'B2B-LAP-01');
   } else if (query.includes('monitor') || query.includes('flexmonitor')) {
-    selected = window.Catalog.b2bProducts.find(p => p.id === 'B2B-MON-02');
-    const match = query.match(/(\d+)/);
-    qty = match ? parseInt(match[1]) : 30;
+    productMentioned = window.Catalog.b2bProducts.find(p => p.id === 'B2B-MON-02');
   } else if (query.includes('servidor') || query.includes('cloudbox')) {
-    selected = window.Catalog.b2bProducts.find(p => p.id === 'B2B-SRV-03');
-    const match = query.match(/(\d+)/);
-    qty = match ? parseInt(match[1]) : 5;
+    productMentioned = window.Catalog.b2bProducts.find(p => p.id === 'B2B-SRV-03');
   }
 
   // Solicitud de descuento adicional
@@ -545,7 +541,31 @@ function handleB2BInput(text) {
     return;
   }
 
-  // Generar Cotización Inicial
+  let selected = null;
+  let qty = 0;
+
+  if (productMentioned) {
+    if (parsedNumber > 0) {
+      // Caso 1: Menciona el producto y la cantidad en el mismo mensaje
+      selected = productMentioned;
+      qty = parsedNumber;
+      state.b2b.pendingProduct = null; // Limpiar pendientes
+    } else {
+      // Caso 2: Menciona el producto pero no la cantidad
+      state.b2b.pendingProduct = productMentioned;
+      addTrace('interpreta', 'Falta Cantidad', `Detectado producto ${productMentioned.name} sin cantidad especificada. Solicitando cantidad.`);
+      appendAgentMessage(`Excelente elección. Desea cotizar **${productMentioned.name}**. ¿Qué cantidad de unidades necesita? (Por favor, responda indicando solo el número, el pedido mínimo es de ${productMentioned.minOrderQty} unidades).`);
+      return;
+    }
+  } else if (parsedNumber > 0 && state.b2b.pendingProduct) {
+    // Caso 3: Mandó solo un número, y teníamos guardado un producto pendiente
+    selected = state.b2b.pendingProduct;
+    qty = parsedNumber;
+    state.b2b.pendingProduct = null; // Limpiar
+    addTrace('interpreta', 'Cantidad Vinculada', `Asociando cantidad de ${qty} unidades al producto pendiente ${selected.name}.`);
+  }
+
+  // Generar Cotización Inicial si logramos identificar ambos
   if (selected && qty > 0) {
     if (qty < selected.minOrderQty) {
       addTrace('alerta', 'Guardrail - Cantidad Mínima', `Cantidad ${qty} es menor al pedido mínimo B2B (${selected.minOrderQty}). Ajustando automáticamente.`);
@@ -566,7 +586,7 @@ function handleB2BInput(text) {
 
   // Fallback
   addTrace('interpreta', 'Clasificación Conversacional', 'Consulta general sin intención clara de cotización.');
-  appendAgentMessage("Puedo generar cotizaciones automáticas para nuestros productos mayoristas (Notebooks ThinkWork Pro, Monitores FlexMonitor y Servidores CloudBox). Indíqueme la cantidad requerida para procesarlo.");
+  appendAgentMessage("Puedo generar cotizaciones automáticas para nuestros productos mayoristas (Notebooks ThinkWork Pro, Monitores FlexMonitor y Servidores CloudBox). Indíqueme el producto y la cantidad requerida para procesarlo.");
 }
 
 // Calcular y Renderizar la Hoja de Cotización
