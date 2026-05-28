@@ -34,9 +34,15 @@
     
     <!-- Columna Izquierda: Simulador Interactivo -->
     <section class="glass-panel simulator-container" id="simulator-section">
-      <div class="panel-title">
-        <i class="fa-solid fa-sliders" id="simulator-icon"></i> 
-        <span id="simulator-title">Asistente de Ventas B2C</span>
+      <div class="panel-title" style="display: flex; flex-direction: column; align-items: stretch; gap: 0.4rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; width: 100%;">
+          <i class="fa-solid fa-sliders" id="simulator-icon"></i> 
+          <span id="simulator-title">Asistente de Ventas B2C</span>
+          <span class="logo-badge" style="margin-left: auto; background: rgba(37, 99, 235, 0.15); border-color: rgba(37, 99, 235, 0.3); color: var(--accent-cyan); font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.5rem;">VISTA DE USUARIO</span>
+        </div>
+        <div style="font-size: 0.75rem; font-weight: normal; color: var(--text-secondary); line-height: 1.3;">
+          <i class="fa-solid fa-circle-info" style="color: var(--text-muted); font-size: 0.7rem;"></i> Canal de interacción externa del cliente minorista, corporativo o del operador logístico.
+        </div>
       </div>
 
       <!-- Barra de configuración B2B (Solo visible en modo B2B) -->
@@ -102,8 +108,15 @@
 
     <!-- Columna Derecha: Consola de Trazas del Agente -->
     <section class="glass-panel trace-panel">
-      <div class="panel-title">
-        <i class="fa-solid fa-terminal"></i> Agentic Traces <span style="font-weight: normal; font-size: 0.8rem; color: var(--text-muted); margin-left: auto;">Bajo el Capó</span>
+      <div class="panel-title" style="display: flex; flex-direction: column; align-items: stretch; gap: 0.4rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; width: 100%;">
+          <i class="fa-solid fa-terminal"></i> 
+          <span>Agentic Traces</span>
+          <span class="logo-badge" style="margin-left: auto; background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.3); color: #c084fc; font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.5rem;">CEREBRO DEL AGENTE</span>
+        </div>
+        <div style="font-size: 0.75rem; font-weight: normal; color: var(--text-secondary); line-height: 1.3;">
+          <i class="fa-solid fa-brain" style="color: var(--text-muted); font-size: 0.7rem;"></i> Procesos de razonamiento, consultas a base de datos y ejecución de reglas del Agente en tiempo real.
+        </div>
       </div>
       <div class="trace-logger" id="trace-logger">
         <!-- Trazas operativas del agente cargadas dinámicamente -->
