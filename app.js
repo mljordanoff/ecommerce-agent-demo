@@ -58,6 +58,14 @@ const WELCOME_MESSAGES = {
 // Al iniciar la página
 document.addEventListener("DOMContentLoaded", () => {
   initApp();
+
+  // Re-ajustar canvas al cambiar tamaño de pantalla
+  window.addEventListener("resize", () => {
+    if (state.currentMode === 'logistics') {
+      setupWarehouseCanvas();
+      drawWarehouseGrid(null);
+    }
+  });
 });
 
 function initApp() {
@@ -138,6 +146,8 @@ function switchMode(mode) {
     addTrace('interpreta', 'Contexto Almacén (WMS)', 'Iniciando módulo de optimización de operaciones de picking y devoluciones.');
     addTrace('consulta', 'Conexión WMS/ERP', 'Conectado a inventarios físicos y mapa tridimensional de estanterías del depósito.');
     
+    // Medir y configurar el canvas ahora que el panel es visible (display: flex)
+    setupWarehouseCanvas();
     drawWarehouseGrid(null); // Dibujar mapa de almacén estático inicial
   }
 }
