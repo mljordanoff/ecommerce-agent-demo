@@ -490,11 +490,11 @@ function checkoutB2C() {
     addTrace('ejecuta', 'Transacción ERP/OMS', `Generando orden de venta en ERP por $${total.toFixed(2)} USD. Pago aprobado.`);
     addTrace('ejecuta', 'Registro en CRM', 'Orden registrada con éxito. Estado: Completada.');
 
-    appendAgentMessage(`🚀 **¡Compra finalizada con éxito!** Se ha procesado tu orden por un total de **$${total.toFixed(2)} USD**. Tu pedido ya se está preparando en el centro de distribución. El comprobante y la factura electrónica fueron enviados a tu correo: **laura.jordanoff@baufest.com**.`);
+    appendAgentMessage(`🚀 **¡Compra finalizada con éxito!** Se ha procesado tu orden por un total de **$${total.toFixed(2)} USD**. Tu pedido ya se está preparando en el centro de distribución. El comprobante y la factura electrónica fueron enviados a tu correo: **mljordanoff@baufest.com**.`);
     
     // Registrar la orden en la base de datos simulada
     const itemsList = state.b2cCart.map(item => `${item.quantity}x ${item.name}`).join(", ");
-    registerOrder("B2C", "laura.jordanoff@baufest.com", itemsList, total);
+    registerOrder("B2C", "mljordanoff@baufest.com", itemsList, total);
 
     // Vaciar carrito
     state.b2cCart = [];
