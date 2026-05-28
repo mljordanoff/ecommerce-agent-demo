@@ -17,6 +17,7 @@ let state = {
     role: 'decisor',
     activeProduct: null,
     pendingProduct: null, // Guardar producto mencionado para cuando digan solo la cantidad
+    negotiating: false,   // Saber si estamos esperando un porcentaje de descuento
     quantity: 0,
     listPrice: 0,
     currentDiscount: 0.05, // descuento base inicial
@@ -516,6 +517,17 @@ function handleB2BInput(text) {
   const matchNumber = query.match(/(\d+)/);
   const parsedNumber = matchNumber ? parseInt(matchNumber[1]) : 0;
 
+  // 1. Si estamos activamente esperando un porcentaje de descuento de la negociación
+  if (state.b2b.negotiating && parsedNumber > 0) {
+    state.b2b.negotiating = false;
+    let requestedDiscount = parsedNumber;
+    if (requestedDiscount > 1) {
+      requestedDiscount = requestedDiscount / 100; // Convertir 12 a 0.12
+    }
+    executeB2BNegotiation(requestedDiscount);
+    return;
+  }
+
   // Identificar si se menciona algún producto
   let productMentioned = null;
   if (query.includes('notebook') || query.includes('thinkwork') || query.includes('portatil') || query.includes('laptop')) {
@@ -527,17 +539,33 @@ function handleB2BInput(text) {
   }
 
   // Solicitud de descuento adicional
-  if (query.includes('descuento') || query.includes('negociar') || query.includes('rebaja') || query.includes('%')) {
+  if (query.includes('descuento') || query.includes('negociar') || query.includes('rebaja') || query.includes('%') || 
+      ((query === 'si' || query === 'sí' || query === 'quiero' || query === 'claro' || query === 'ok' || query.includes('adicional')) && state.b2b.activeProduct)) {
+    
     if (!state.b2b.activeProduct) {
       appendAgentMessage("Para negociar un descuento, primero necesitamos generar una cotización. ¿Qué producto y cantidad le gustaría cotizar?");
       return;
     }
     
-    // Extraer porcentaje si existe
+    // Resetear flag de negociación temporal
+    state.b2b.negotiating = false;
+
+    // Extraer porcentaje si existe en la query
     const matchPercent = query.match(/(\d+)\s*%/);
-    let requestedDiscount = matchPercent ? parseFloat(matchPercent[1]) / 100 : 0.12; // default 12%
+    const matchNumRaw = query.match(/(\d+)/);
     
-    executeB2BNegotiation(requestedDiscount);
+    if (matchPercent) {
+      let requestedDiscount = parseFloat(matchPercent[1]) / 100;
+      executeB2BNegotiation(requestedDiscount);
+    } else if (matchNumRaw && query.includes('%')) {
+      let requestedDiscount = parseFloat(matchNumRaw[1]) / 100;
+      executeB2BNegotiation(requestedDiscount);
+    } else {
+      // Si no especificó un porcentaje, le preguntamos y activamos el flag
+      state.b2b.negotiating = true;
+      addTrace('interpreta', 'Intención de Negociación', 'El cliente desea negociar un descuento pero no especificó el porcentaje.');
+      appendAgentMessage(`Entendido, iniciemos la negociación de la cotización **${state.b2b.quoteNumber}**. <br><br>¿Qué porcentaje de descuento adicional desea solicitar? Por favor, indíquelo (ejemplo: **12%** o **15%**).`);
+    }
     return;
   }
 
@@ -550,9 +578,11 @@ function handleB2BInput(text) {
       selected = productMentioned;
       qty = parsedNumber;
       state.b2b.pendingProduct = null; // Limpiar pendientes
+      state.b2b.negotiating = false;   // Resetear negociación
     } else {
       // Caso 2: Menciona el producto pero no la cantidad
       state.b2b.pendingProduct = productMentioned;
+      state.b2b.negotiating = false;   // Resetear negociación
       addTrace('interpreta', 'Falta Cantidad', `Detectado producto ${productMentioned.name} sin cantidad especificada. Solicitando cantidad.`);
       appendAgentMessage(`Excelente elección. Desea cotizar **${productMentioned.name}**. ¿Qué cantidad de unidades necesita? (Por favor, responda indicando solo el número, el pedido mínimo es de ${productMentioned.minOrderQty} unidades).`);
       return;
@@ -562,6 +592,7 @@ function handleB2BInput(text) {
     selected = state.b2b.pendingProduct;
     qty = parsedNumber;
     state.b2b.pendingProduct = null; // Limpiar
+    state.b2b.negotiating = false;   // Resetear negociación
     addTrace('interpreta', 'Cantidad Vinculada', `Asociando cantidad de ${qty} unidades al producto pendiente ${selected.name}.`);
   }
 
