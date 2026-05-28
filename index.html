@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baufest Agentic E-Commerce - Simulador Interactiva v2026</title>
+  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo-container">
+      <div class="logo-text"><i class="fa-solid fa-robot"></i> baufest <span style="font-weight: 300; font-size: 1.1rem; color: var(--accent-cyan);">agentic commerce</span></div>
+      <span class="logo-badge">MVP Simulator v4</span>
+    </div>
+    
+    <div class="nav-tabs">
+      <button class="tab-btn active" onclick="switchMode('b2c')">
+        <i class="fa-solid fa-shopping-bag"></i> B2C Minorista
+      </button>
+      <button class="tab-btn" onclick="switchMode('b2b')">
+        <i class="fa-solid fa-building"></i> B2B Mayorista
+      </button>
+      <button class="tab-btn" onclick="switchMode('logistics')">
+        <i class="fa-solid fa-boxes-packing"></i> Almacén & Logística
+      </button>
+    </div>
+  </header>
+
+  <!-- Layout Principal -->
+  <main class="main-layout">
+    
+    <!-- Columna Izquierda: Simulador Interactivo -->
+    <section class="glass-panel simulator-container" id="simulator-section">
+      <div class="panel-title">
+        <i class="fa-solid fa-sliders" id="simulator-icon"></i> 
+        <span id="simulator-title">Asistente de Ventas B2C</span>
+      </div>
+
+      <!-- Barra de configuración B2B (Solo visible en modo B2B) -->
+      <div class="b2b-config-bar" id="b2b-config" style="display: none;">
+        <div class="b2b-config-item">
+          <i class="fa-solid fa-user-tie" style="color: var(--accent-cyan)"></i>
+          <label for="b2b-client-select">Cuenta:</label>
+          <select id="b2b-client-select" onchange="onB2BConfigChange()">
+            <option value="CLI-GLOBAL-TECH">Global Tech Solutions (GOLD)</option>
+            <option value="CLI-PAPYRUS-INC">Papyrus Industrias (SILVER)</option>
+            <option value="CLI-STARTUP-NEX">Nexus Innovación (BRONZE)</option>
+          </select>
+        </div>
+        <div class="b2b-config-item">
+          <i class="fa-solid fa-id-card-clip" style="color: var(--accent-purple)"></i>
+          <label for="b2b-role-select">Rol de Interlocutor:</label>
+          <select id="b2b-role-select" onchange="onB2BConfigChange()">
+            <option value="decisor">Decisor (CEO/Director - ROI)</option>
+            <option value="compras">Responsable Presupuesto (Compras - Precio)</option>
+            <option value="tecnico">Evaluador Técnico (Arquitectura/Specs)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Área de Chat (B2C & B2B) -->
+      <div class="chat-window" id="chat-window-area">
+        <div class="chat-messages" id="chat-messages">
+          <!-- Mensaje inicial generado dinámicamente -->
+        </div>
+        
+        <!-- Sugerencias de prompt rápidas -->
+        <div class="prompt-chips" id="prompt-chips">
+          <!-- Chips cargados dinámicamente según el modo -->
+        </div>
+
+        <div class="chat-input-area">
+          <input type="text" class="chat-input" id="chat-input" placeholder="Pregúntale al agente..." onkeydown="handleChatKey(event)">
+          <button class="send-btn" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
+        </div>
+      </div>
+
+      <!-- Panel de Logística (Oculto por defecto) -->
+      <div class="warehouse-grid-container" id="warehouse-area" style="display: none; height: 100%;">
+        <div class="warehouse-meta">
+          <div><i class="fa-solid fa-map-location-dot"></i> Orquestación de Picking en Tiempo Real</div>
+          <div id="picking-status"><span class="logo-badge" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: var(--success);">Listo</span></div>
+        </div>
+        
+        <div class="warehouse-canvas-container">
+          <canvas id="warehouse-canvas"></canvas>
+        </div>
+
+        <div class="chat-input-area" style="border: none; padding-top: 0;">
+          <button class="send-btn" style="background: var(--accent-blue); color: white;" onclick="startPickingDemo()">
+            <i class="fa-solid fa-route"></i> Simular Picking Óptimo
+          </button>
+          <button class="send-btn" style="background: var(--accent-purple); color: white;" onclick="startReturnsDemo()">
+            <i class="fa-solid fa-rotate-left"></i> Simular Devolución Automatizada
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Columna Derecha: Consola de Trazas del Agente -->
+    <section class="glass-panel trace-panel">
+      <div class="panel-title">
+        <i class="fa-solid fa-terminal"></i> Agentic Traces <span style="font-weight: normal; font-size: 0.8rem; color: var(--text-muted); margin-left: auto;">Bajo el Capó</span>
+      </div>
+      <div class="trace-logger" id="trace-logger">
+        <!-- Trazas operativas del agente cargadas dinámicamente -->
+      </div>
+    </section>
+
+    <!-- CFO Business Dashboard (Métricas) -->
+    <section class="glass-panel cfo-dashboard">
+      <div class="panel-title">
+        <i class="fa-solid fa-chart-line"></i> Dashboard CFO & Negocio <span style="font-weight: normal; font-size: 0.8rem; color: var(--text-muted); margin-left: auto;">Impacto Medible del MVP</span>
+      </div>
+      <div class="kpi-grid">
+        
+        <!-- KPI 1: Tasa de Conversión -->
+        <div class="kpi-card cyan">
+          <div class="kpi-label">Conversión B2C</div>
+          <div class="kpi-value-container">
+            <span class="kpi-value" id="kpi-conversion">2.4%</span>
+            <span class="kpi-diff up" id="kpi-conversion-diff"><i class="fa-solid fa-arrow-up"></i> Base</span>
+          </div>
+          <div class="kpi-progress">
+            <div class="kpi-progress-bar" id="progress-conversion" style="width: 15%;"></div>
+          </div>
+        </div>
+
+        <!-- KPI 2: Velocidad Comercial B2B -->
+        <div class="kpi-card success">
+          <div class="kpi-label">Velocidad Cotización</div>
+          <div class="kpi-value-container">
+            <span class="kpi-value" id="kpi-speed">48h</span>
+            <span class="kpi-diff up" id="kpi-speed-diff" style="color: var(--text-muted)">Manual</span>
+          </div>
+          <div class="kpi-progress">
+            <div class="kpi-progress-bar" id="progress-speed" style="width: 5%; background: var(--success);"></div>
+          </div>
+        </div>
+
+        <!-- KPI 3: Recompra / Stock -->
+        <div class="kpi-card warning">
+          <div class="kpi-label">Recompra Predictiva</div>
+          <div class="kpi-value-container">
+            <span class="kpi-value" id="kpi-reorder">0%</span>
+            <span class="kpi-diff up" id="kpi-reorder-diff"><i class="fa-solid fa-arrow-up"></i> Base</span>
+          </div>
+          <div class="kpi-progress">
+            <div class="kpi-progress-bar" id="progress-reorder" style="width: 0%; background: var(--warning);"></div>
+          </div>
+        </div>
+
+        <!-- KPI 4: Costo Operativo Warehouse -->
+        <div class="kpi-card purple">
+          <div class="kpi-label">Costo Picking</div>
+          <div class="kpi-value-container">
+            <span class="kpi-value" id="kpi-cost">100%</span>
+            <span class="kpi-diff down" id="kpi-cost-diff"><i class="fa-solid fa-arrow-down"></i> Base</span>
+          </div>
+          <div class="kpi-progress">
+            <div class="kpi-progress-bar" id="progress-cost" style="width: 100%; background: var(--accent-purple);"></div>
+          </div>
+        </div>
+
+        <!-- KPI 5: NPS Posventa -->
+        <div class="kpi-card">
+          <div class="kpi-label">NPS Posventa</div>
+          <div class="kpi-value-container">
+            <span class="kpi-value" id="kpi-nps">+45</span>
+            <span class="kpi-diff up" id="kpi-nps-diff"><i class="fa-solid fa-plus"></i> Base</span>
+          </div>
+          <div class="kpi-progress">
+            <div class="kpi-progress-bar" id="progress-nps" style="width: 45%;"></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="main-footer">
+    <p>baufest &copy; 2026 - Evolving. Business. Together. | Desarrollado para demostración a Stakeholders</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="catalog.js?v=2"></script>
+  <script src="app.js?v=3"></script>
+</body>
+</html>

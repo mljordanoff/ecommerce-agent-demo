@@ -1,0 +1,987 @@
+// Lógica del Simulador del Agente de E-Commerce (baufest 2026)
+
+// Estado Global de la Simulación
+let state = {
+  currentMode: 'b2c',
+  // B2C Cart state
+  b2cCart: [],
+  // B2B state
+  b2b: {
+    clientKey: 'CLI-GLOBAL-TECH',
+    role: 'decisor',
+    activeProduct: null,
+    quantity: 0,
+    listPrice: 0,
+    currentDiscount: 0.05, // descuento base inicial
+    quoteNumber: null
+  },
+  // KPI values (dynamic representation)
+  kpis: {
+    conversion: 2.4,
+    speed: '48h',
+    reorder: 0,
+    cost: 100,
+    nps: 45
+  }
+};
+
+// Configuración de los Prompts Sugeridos por Modo
+const SUGGESTIONS = {
+  b2c: [
+    "Busco zapatillas para correr en asfalto con buena amortiguación",
+    "¿Qué mochila de trekking resistente al agua me recomiendas?",
+    "Tengo presupuesto de $100 USD para un reloj o accesorio deportivo",
+    "¿Tienen stock de la SmartFit Band X?"
+  ],
+  b2b: [
+    "Cotizar 50 Notebooks ThinkWork Pro v6",
+    "Necesito un presupuesto de 30 Monitores FlexMonitor 24\"",
+    "¿Podemos negociar un descuento adicional del 12% en la cotización?",
+    "Cotizar 5 Servidores Edge CloudBox S1"
+  ]
+};
+
+// Mensajes Iniciales de Bienvenida del Agente
+const WELCOME_MESSAGES = {
+  b2c: `¡Hola! 👋 Soy tu <strong>Agente de Compras Personalizado</strong>. Estoy conectado directamente al catálogo y stock en tiempo real. ¿En qué puedo ayudarte hoy? Cuéntame qué estás buscando, tu presupuesto o tus preferencias de uso.`,
+  b2b: `Estimado socio corporativo, bienvenido al canal de <strong>Cotización Inteligente B2B</strong>. <br><br>Estoy autorizado para realizar consultas en ERP, verificar niveles de contrato en CRM y **negociar precios de volumen con aprobación inmediata**. ¿Qué productos y cantidades desea cotizar hoy?`
+};
+
+// Al iniciar la página
+document.addEventListener("DOMContentLoaded", () => {
+  initApp();
+});
+
+function initApp() {
+  switchMode('b2c');
+  setupWarehouseCanvas();
+}
+
+// Cambiar de Modo (B2C, B2B, Logística)
+function switchMode(mode) {
+  state.currentMode = mode;
+  
+  // Actualizar botones de navegación
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  const activeBtn = document.querySelector(`.tab-btn[onclick="switchMode('${mode}')"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  // Obtener elementos
+  const b2bConfig = document.getElementById('b2b-config');
+  const chatWindowArea = document.getElementById('chat-window-area');
+  const warehouseArea = document.getElementById('warehouse-area');
+  const simTitle = document.getElementById('simulator-title');
+  const simIcon = document.getElementById('simulator-icon');
+
+  // Limpiar chat y trazas
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('trace-logger').innerHTML = '';
+
+  // Configurar interfaz según modo
+  if (mode === 'b2c') {
+    b2bConfig.style.display = 'none';
+    chatWindowArea.style.display = 'flex';
+    warehouseArea.style.display = 'none';
+    simTitle.innerText = "Asistente de Ventas B2C (Conversión)";
+    simIcon.className = "fa-solid fa-shopping-bag";
+    
+    addTrace('interpreta', 'Contexto B2C', 'Cargando canal minorista. Reglas: Optimización de conversión de carrito y recomendación inteligente de catálogo.');
+    addTrace('consulta', 'Conectando Catálogo', 'Accediendo a base de datos de productos minoristas. Stock activo sincronizado.');
+    
+    appendAgentMessage(WELCOME_MESSAGES.b2c);
+    renderSuggestions('b2c');
+    
+  } else if (mode === 'b2b') {
+    b2bConfig.style.display = 'flex';
+    chatWindowArea.style.display = 'flex';
+    warehouseArea.style.display = 'none';
+    simTitle.innerText = "Agente de Negociación B2B (Cotizador)";
+    simIcon.className = "fa-solid fa-building";
+    
+    onB2BConfigChange();
+    appendAgentMessage(WELCOME_MESSAGES.b2b);
+    renderSuggestions('b2b');
+    
+  } else if (mode === 'logistics') {
+    b2bConfig.style.display = 'none';
+    chatWindowArea.style.display = 'none';
+    warehouseArea.style.display = 'flex';
+    simTitle.innerText = "Orquestación de Centro de Distribución";
+    simIcon.className = "fa-solid fa-boxes-packing";
+    
+    addTrace('interpreta', 'Contexto Almacén (WMS)', 'Iniciando módulo de optimización de operaciones de picking y devoluciones.');
+    addTrace('consulta', 'Conexión WMS/ERP', 'Conectado a inventarios físicos y mapa tridimensional de estanterías del depósito.');
+    
+    drawWarehouseGrid(null); // Dibujar mapa de almacén estático inicial
+  }
+}
+
+// Renderizar Chips de sugerencias
+function renderSuggestions(mode) {
+  const container = document.getElementById('prompt-chips');
+  container.innerHTML = '';
+  SUGGESTIONS[mode].forEach(text => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerText = text;
+    chip.onclick = () => {
+      document.getElementById('chat-input').value = text;
+      sendMessage();
+    };
+    container.appendChild(chip);
+  });
+}
+
+// Manejar cambios de cuenta/rol en B2B
+function onB2BConfigChange() {
+  const clientKey = document.getElementById('b2b-client-select').value;
+  const role = document.getElementById('b2b-role-select').value;
+  
+  state.b2b.clientKey = clientKey;
+  state.b2b.role = role;
+  
+  const clientInfo = window.Catalog.b2bClients[clientKey];
+  
+  addTrace('consulta', 'Verificando CRM', `Empresa: ${clientInfo.name} | Contrato: ${clientInfo.contractTerm} | Nivel: ${clientInfo.tier} | Descuento Máx Auto: ${Math.round(clientInfo.maxAutoDiscount*100)}% | Condiciones Pago: ${clientInfo.paymentTerms}`);
+  
+  // Si cambia el rol y hay una cotización activa, explicar el impacto en las trazas
+  if (state.b2b.activeProduct) {
+    explainB2BPersonalization();
+  }
+}
+
+// Enviar Mensaje
+function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  // Renderizar mensaje de usuario
+  appendUserMessage(text);
+  input.value = '';
+
+  // Simular tiempo de pensamiento del agente
+  setTimeout(() => {
+    if (state.currentMode === 'b2c') {
+      handleB2CInput(text);
+    } else if (state.currentMode === 'b2b') {
+      handleB2BInput(text);
+    }
+  }, 600);
+}
+
+function handleChatKey(event) {
+  if (event.key === 'Enter') {
+    sendMessage();
+  }
+}
+
+// Renderizar burbujas en el chat
+function appendUserMessage(text) {
+  const chat = document.getElementById('chat-messages');
+  const msg = document.createElement('div');
+  msg.className = 'message user';
+  msg.innerText = text;
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function appendAgentMessage(html) {
+  const chat = document.getElementById('chat-messages');
+  const msg = document.createElement('div');
+  msg.className = 'message agent';
+  msg.innerHTML = html;
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function appendSystemAlert(text) {
+  const chat = document.getElementById('chat-messages');
+  const msg = document.createElement('div');
+  msg.className = 'message system-alert';
+  msg.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> ${text}`;
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// Escribir en la Consola de Trazas (Under the Hood)
+function addTrace(type, title, body) {
+  const logger = document.getElementById('trace-logger');
+  const entry = document.createElement('div');
+  entry.className = `trace-entry ${type}`;
+  
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${(now.getMilliseconds()/10).toFixed(0).padStart(2, '0')}`;
+  
+  let icon = 'info-circle';
+  if (type === 'interpreta') icon = 'brain';
+  if (type === 'consulta') icon = 'database';
+  if (type === 'recomienda') icon = 'wand-magic-sparkles';
+  if (type === 'negocia') icon = 'handshake';
+  if (type === 'ejecuta') icon = 'check-double';
+  if (type === 'alerta') icon = 'triangle-exclamation';
+
+  entry.innerHTML = `
+    <div class="trace-tag ${type}">
+      <i class="fa-solid fa-${icon}"></i> ${title} 
+      <span class="trace-time">[${timeStr}]</span>
+    </div>
+    <div class="trace-body">${body}</div>
+  `;
+  
+  logger.appendChild(entry);
+  logger.scrollTop = logger.scrollHeight;
+}
+
+// -------------------------------------------------------------
+// MOTOR DE DIÁLOGO B2C (Minorista)
+// -------------------------------------------------------------
+function handleB2CInput(text) {
+  const query = text.toLowerCase();
+  
+  addTrace('interpreta', 'NLP - Interpreta Intención', `Analizando consulta de usuario: "${text}"`);
+  
+  // Ver carrito
+  if (query.includes('carrito') || query.includes('mostrar carrito') || query.includes('ver mi carrito')) {
+    addTrace('consulta', 'Consulta Carrito B2C', 'Recuperando items activos en el carrito de compras.');
+    renderB2CCart();
+    return;
+  }
+
+  // Checkout
+  if (query.includes('comprar') || query.includes('pagar') || query.includes('checkout') || query.includes('confirmar')) {
+    checkoutB2C();
+    return;
+  }
+  
+  // Saludos
+  if (query.includes('hola') || query.includes('buen') || query.includes('inicio') || query.includes('empezar')) {
+    addTrace('recomienda', 'Saludo Detectado', 'Respondiendo saludo inicial.');
+    appendAgentMessage("¡Hola! 😊 ¿Cómo puedo ayudarte hoy? Estoy aquí para ayudarte a elegir el mejor equipamiento deportivo. Puedes preguntarme por calzado para correr (asfalto o trail), mochilas de montaña o accesorios inteligentes.");
+    return;
+  }
+
+  // Ver si consulta catálogo completo
+  if (query.includes('catalogo') || query.includes('productos') || query.includes('que tenes') || query.includes('que venden') || query.includes('lista')) {
+    addTrace('consulta', 'Consulta Catálogo Completo', 'Listando todos los productos B2C de la base de datos.');
+    let html = `<p>Actualmente tengo los siguientes productos en oferta minorista B2C:</p><ul>`;
+    window.Catalog.b2cProducts.forEach(p => {
+      html += `<li><strong>${p.name}</strong> - $${p.price} USD (${p.category})</li>`;
+    });
+    html += `</ul><p style="margin-top: 0.5rem;">Dime cuál te interesa y te daré detalles de stock y especificaciones.</p>`;
+    appendAgentMessage(html);
+    return;
+  }
+
+  // Redirigir si busca productos B2B corporativos
+  if (query.includes('notebook') || query.includes('thinkwork') || query.includes('laptop') || query.includes('portatil') || query.includes('monitor') || query.includes('servidor') || query.includes('cloudbox') || query.includes('mayorista') || query.includes('b2b')) {
+    addTrace('alerta', 'Guardrail - Intención B2B', 'Se detectó búsqueda de productos corporativos/B2B en el canal minorista B2C.');
+    appendAgentMessage(`💼 **Canal de Compras Corporativas (B2B)**<br>Veo que estás buscando equipos tecnológicos o compras al por mayor (Notebooks, Monitores o Servidores).<br><br>Por favor, **haz clic en la pestaña "B2B Mayorista"** en la parte superior para acceder al cotizador automático y al negociador de descuentos de volumen.`);
+    return;
+  }
+  
+  // Caso de uso: Zapatillas
+  if (query.includes('zapatilla') || query.includes('correr') || query.includes('running') || query.includes('speed') || query.includes('ultraboost') || query.includes('calzado') || query.includes('tenis') || query.includes('zapas')) {
+    addTrace('consulta', 'Consulta ERP & OMS', 'Buscando categorías relativas a Calzado Deportivo. Validando stock de talles.');
+    
+    let selected = null;
+    let details = "";
+    
+    if (query.includes('asfalto') || query.includes('amortiguación') || query.includes('ciudad') || !query.includes('montaña') && !query.includes('trail') && !query.includes('tierra')) {
+      selected = window.Catalog.b2cProducts.find(p => p.id === 'RUN-001');
+      details = `Aquí tienes las **${selected.name}**. Son ideales para amortiguación alta en superficies duras como asfalto. Quedan **${selected.stock} unidades** disponibles en nuestro almacén central.`;
+    } else {
+      selected = window.Catalog.b2cProducts.find(p => p.id === 'RUN-002');
+      details = `Para terrenos difíciles de montaña o senderos, te recomiendo las **${selected.name}**. Tienen suela con tracción especial y protección impermeable. Contamos con **${selected.stock} unidades** en stock.`;
+    }
+
+    addTrace('recomienda', 'Sugerencia Contextual', `Recomendado producto ID: ${selected.id} en base a condiciones de uso.`);
+    
+    let html = `
+      <p>${details}</p>
+      <div class="product-card-preview">
+        <div class="product-img-placeholder"><i class="fa-solid fa-shoe-prints"></i></div>
+        <div class="product-info-mini">
+          <div class="product-name-mini">${selected.name}</div>
+          <div class="product-price-mini">$${selected.price.toFixed(2)} USD</div>
+        </div>
+        <button class="send-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="simulateB2CCartAdd('${selected.name}', ${selected.price})">Agregar</button>
+      </div>
+    `;
+    
+    appendAgentMessage(html);
+    updateCFOkpis({ conversion: 8.5 }); // Impacto parcial en conversión
+    return;
+  }
+
+  // Caso de uso: Mochila
+  if (query.includes('mochila') || query.includes('trekking') || query.includes('explorer') || query.includes('bolso') || query.includes('acampada')) {
+    addTrace('consulta', 'Consulta Catálogo', 'Buscando artículos de Outdoor / Equipamiento.');
+    const backpack = window.Catalog.b2cProducts.find(p => p.id === 'OUT-001');
+    addTrace('recomienda', 'Recomendación Algorítmica', 'Sugerido Mochila Explorer 45L basado en mochila/trekking.');
+    
+    let html = `
+      <p>Excelente opción para excursiones. La <strong>${backpack.name}</strong> tiene una capacidad de ${backpack.specs.capacidad} y está fabricada en ${backpack.specs.material}. Nos quedan solo <strong>${backpack.stock} unidades</strong> en stock.</p>
+      <div class="product-card-preview">
+        <div class="product-img-placeholder"><i class="fa-solid fa-backpack"></i></div>
+        <div class="product-info-mini">
+          <div class="product-name-mini">${backpack.name}</div>
+          <div class="product-price-mini">$${backpack.price.toFixed(2)} USD</div>
+        </div>
+        <button class="send-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="simulateB2CCartAdd('${backpack.name}', ${backpack.price})">Agregar</button>
+      </div>
+    `;
+    appendAgentMessage(html);
+    return;
+  }
+
+  // Caso de uso: Presupuesto o Reloj
+  if (query.includes('reloj') || query.includes('smartband') || query.includes('accesorio') || query.includes('presupuesto') || query.includes('100') || query.includes('fit') || query.includes('band') || query.includes('pulsera')) {
+    addTrace('consulta', 'Consulta ERP & Filtros', 'Filtro por rango de precio: <= $120 USD.');
+    const band = window.Catalog.b2cProducts.find(p => p.id === 'FIT-001');
+    addTrace('recomienda', 'Recomendación Cruzada', 'Sugerido SmartFit Band X por precio e intenciones de accesorio.');
+    
+    let html = `
+      <p>Bajo ese presupuesto, la <strong>${band.name}</strong> es tu mejor opción por $${band.price} USD. Ofrece pantalla ${band.specs.pantalla} y tiene una autonomía de ${band.specs.bateria}.</p>
+      <div class="product-card-preview">
+        <div class="product-img-placeholder"><i class="fa-solid fa-clock"></i></div>
+        <div class="product-info-mini">
+          <div class="product-name-mini">${band.name}</div>
+          <div class="product-price-mini">$${band.price.toFixed(2)} USD</div>
+        </div>
+        <button class="send-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="simulateB2CCartAdd('${band.name}', ${band.price})">Agregar</button>
+      </div>
+    `;
+    appendAgentMessage(html);
+    return;
+  }
+
+  // Fallback
+  addTrace('consulta', 'Motor RAG Fallback', 'Consulta vaga. Listando categorías principales para guiar la intención.');
+  appendAgentMessage("No comprendí exactamente cuál de nuestros productos deportivos deseas. Contamos con calzado especializado (Zapatillas UltraBoost y SpeedTrail), mochilas (Mochila Explorer) y relojes inteligentes (SmartFit Band X). Escribe **'ver catalogo'** si deseas listar todas nuestras ofertas.");
+}
+
+// Simular agregado al carrito B2C y desglose
+function simulateB2CCartAdd(name, price) {
+  addTrace('ejecuta', 'Operación de Carrito', `Agregando ${name} al carrito de compras virtual del cliente.`);
+  
+  // Agregar al array del carrito
+  const existingItem = state.b2cCart.find(item => item.name === name);
+  if (existingItem) {
+    existingItem.quantity += 1;
+  } else {
+    state.b2cCart.push({ name: name, price: price, quantity: 1 });
+  }
+
+  appendSystemAlert(`Has agregado 1x <strong>${name}</strong> al carrito.`);
+  addTrace('consulta', 'Inventario ERP B2C', `Reservando stock temporal para 1 unidad de ${name}. Stock OK.`);
+  
+  let html = `
+    <p>¡Listo! He agregado <strong>${name}</strong> a tu carrito de compras.</p>
+  `;
+  appendAgentMessage(html);
+  
+  // Mostrar resumen del carrito en el chat
+  setTimeout(() => {
+    renderB2CCart();
+  }, 300);
+}
+
+// Renderizar tabla del carrito de compras
+function renderB2CCart() {
+  if (state.b2cCart.length === 0) {
+    appendAgentMessage("Tu carrito de compras está vacío. ¿Te gustaría buscar algún producto como zapatillas o mochilas?");
+    return;
+  }
+
+  let total = 0;
+  let html = `
+    <p>Aquí tienes el detalle de tu <strong>carrito de compras</strong> actual:</p>
+    <div class="quote-sheet">
+  `;
+  state.b2cCart.forEach(item => {
+    const itemTotal = item.price * item.quantity;
+    total += itemTotal;
+    html += `
+      <div class="quote-line">
+        <span>${item.name} (x${item.quantity})</span>
+        <span>$${itemTotal.toFixed(2)} USD</span>
+      </div>
+    `;
+  });
+  html += `
+      <div class="quote-line total">
+        <span>Total del Carrito:</span>
+        <span>$${total.toFixed(2)} USD</span>
+      </div>
+    </div>
+    <div style="margin-top: 0.8rem; display: flex; gap: 0.5rem;">
+      <button class="send-btn" style="background: var(--success); color: var(--bg-primary);" onclick="checkoutB2C()">Proceder al Pago</button>
+      <button class="send-btn" style="background: rgba(255,255,255,0.05); color: var(--text-primary); border: 1px solid var(--border-color);" onclick="clearB2CCart()">Vaciar Carrito</button>
+    </div>
+  `;
+  appendAgentMessage(html);
+}
+
+// Vaciar Carrito B2C
+function clearB2CCart() {
+  state.b2cCart = [];
+  addTrace('ejecuta', 'Vaciando Carrito B2C', 'Se eliminaron todos los productos del carrito.');
+  appendSystemAlert("Has vaciado tu carrito de compras.");
+  appendAgentMessage("Tu carrito ahora está vacío. ¿En qué más puedo ayudarte?");
+}
+
+// Procesar Pago (Checkout) B2C
+function checkoutB2C() {
+  if (state.b2cCart.length === 0) {
+    appendAgentMessage("No hay productos en tu carrito para comprar.");
+    return;
+  }
+
+  let total = 0;
+  state.b2cCart.forEach(item => {
+    total += item.price * item.quantity;
+  });
+
+  addTrace('ejecuta', 'Checkout B2C Iniciado', 'Cliente procede a finalizar la compra. Cargando datos de envío y pago predeterminados.');
+  appendSystemAlert(`Procesando pago por $${total.toFixed(2)} USD...`);
+
+  setTimeout(() => {
+    addTrace('ejecuta', 'Transacción ERP/OMS', `Generando orden de venta en ERP por $${total.toFixed(2)} USD. Pago aprobado.`);
+    addTrace('ejecuta', 'Registro en CRM', 'Orden registrada con éxito. Estado: Completada.');
+
+    appendAgentMessage(`🚀 **¡Compra finalizada con éxito!** Se ha procesado tu orden por un total de **$${total.toFixed(2)} USD**. Tu pedido ya se está preparando en el centro de distribución.`);
+    
+    // Vaciar carrito
+    state.b2cCart = [];
+
+    updateCFOkpis({ 
+      conversion: 14.8, 
+      nps: 58 
+    });
+  }, 1000);
+}
+
+// -------------------------------------------------------------
+// MOTOR DE DIÁLOGO B2B (Mayorista & Negociador)
+// -------------------------------------------------------------
+function handleB2BInput(text) {
+  const query = text.toLowerCase();
+  addTrace('interpreta', 'NLP B2B - Interpreta Rol & Intención', `Analizando consulta corporativa: "${text}" bajo rol de [${state.b2b.role.toUpperCase()}]`);
+
+  // Identificar Productos y Cantidades
+  let selected = null;
+  let qty = 0;
+
+  if (query.includes('notebook') || query.includes('thinkwork') || query.includes('portatil') || query.includes('laptop')) {
+    selected = window.Catalog.b2bProducts.find(p => p.id === 'B2B-LAP-01');
+    // Regex para extraer cantidad
+    const match = query.match(/(\d+)/);
+    qty = match ? parseInt(match[1]) : 50;
+  } else if (query.includes('monitor') || query.includes('flexmonitor')) {
+    selected = window.Catalog.b2bProducts.find(p => p.id === 'B2B-MON-02');
+    const match = query.match(/(\d+)/);
+    qty = match ? parseInt(match[1]) : 30;
+  } else if (query.includes('servidor') || query.includes('cloudbox')) {
+    selected = window.Catalog.b2bProducts.find(p => p.id === 'B2B-SRV-03');
+    const match = query.match(/(\d+)/);
+    qty = match ? parseInt(match[1]) : 5;
+  }
+
+  // Solicitud de descuento adicional
+  if (query.includes('descuento') || query.includes('negociar') || query.includes('rebaja') || query.includes('%')) {
+    if (!state.b2b.activeProduct) {
+      appendAgentMessage("Para negociar un descuento, primero necesitamos generar una cotización. ¿Qué producto y cantidad le gustaría cotizar?");
+      return;
+    }
+    
+    // Extraer porcentaje si existe
+    const matchPercent = query.match(/(\d+)\s*%/);
+    let requestedDiscount = matchPercent ? parseFloat(matchPercent[1]) / 100 : 0.12; // default 12%
+    
+    executeB2BNegotiation(requestedDiscount);
+    return;
+  }
+
+  // Generar Cotización Inicial
+  if (selected && qty > 0) {
+    if (qty < selected.minOrderQty) {
+      addTrace('alerta', 'Guardrail - Cantidad Mínima', `Cantidad ${qty} es menor al pedido mínimo B2B (${selected.minOrderQty}). Ajustando automáticamente.`);
+      appendSystemAlert(`El pedido mínimo para <strong>${selected.name}</strong> es de <strong>${selected.minOrderQty} unidades</strong>. He ajustado la cantidad para poder emitir la cotización.`);
+      qty = selected.minOrderQty;
+    }
+
+    state.b2b.activeProduct = selected;
+    state.b2b.quantity = qty;
+    state.b2b.listPrice = selected.listPrice;
+    state.b2b.quoteNumber = `Q-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    addTrace('consulta', 'ERP - Chequeo de Stock', `Validando existencia de ${qty} unidades de ${selected.id}. Disponible: ${selected.stock} unidades.`);
+    
+    calculateAndRenderQuote();
+    return;
+  }
+
+  // Fallback
+  addTrace('interpreta', 'Clasificación Conversacional', 'Consulta general sin intención clara de cotización.');
+  appendAgentMessage("Puedo generar cotizaciones automáticas para nuestros productos mayoristas (Notebooks ThinkWork Pro, Monitores FlexMonitor y Servidores CloudBox). Indíqueme la cantidad requerida para procesarlo.");
+}
+
+// Calcular y Renderizar la Hoja de Cotización
+function calculateAndRenderQuote() {
+  const clientInfo = window.Catalog.b2bClients[state.b2b.clientKey];
+  const product = state.b2b.activeProduct;
+  const qty = state.b2b.quantity;
+  
+  // Descuento base según nivel de cliente
+  let baseDiscount = 0.02; // Bronze / general
+  if (clientInfo.tier === 'GOLD') baseDiscount = 0.05;
+  if (clientInfo.tier === 'SILVER') baseDiscount = 0.03;
+  
+  state.b2b.currentDiscount = baseDiscount;
+  
+  const subtotal = product.listPrice * qty;
+  const discountVal = subtotal * baseDiscount;
+  const total = subtotal - discountVal;
+  
+  addTrace('ejecuta', 'Motor de Precios B2B', `Aplicando descuento comercial estándar de nivel ${clientInfo.tier} (${baseDiscount*100}%).`);
+  addTrace('ejecuta', 'Generación de Presupuesto', `Generando presupuesto ${state.b2b.quoteNumber} en formato CRM.`);
+
+  // Explicación adaptada al Rol
+  let explanation = "";
+  if (state.b2b.role === 'decisor') {
+    const roiVal = (subtotal * 0.25).toFixed(0); // Simulación de ROI
+    explanation = `He preparado la propuesta comercial enfocada en la eficiencia operativa. La incorporación de estos equipos proyecta un **retorno de inversión (ROI) estimado de $${roiVal} USD** en el primer año debido al ahorro de energía y productividad.`;
+  } else if (state.b2b.role === 'compras') {
+    explanation = `Aquí tiene el detalle de la cotización para compras. Se ha aplicado la tarifa especial con **condiciones de pago a ${clientInfo.paymentTerms}** según nuestro acuerdo de nivel corporativo.`;
+  } else if (state.b2b.role === 'tecnico') {
+    explanation = `Propuesta técnica lista. Los equipos cumplen con las especificaciones del contrato: **${product.specs.procesador || product.specs.resolucion || 'Especificación Corporativa'}** y garantía corporativa de **${product.specs.garantia || '1 año'}**.`;
+  }
+
+  let html = `
+    <p>He emitido la cotización oficial **${state.b2b.quoteNumber}** para la cuenta **${clientInfo.name}**.</p>
+    <p style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary); italic;">${explanation}</p>
+    
+    <div class="quote-sheet">
+      <div class="quote-line"><span>Producto:</span> <span>${product.name}</span></div>
+      <div class="quote-line"><span>Cantidad:</span> <span>${qty} un.</span></div>
+      <div class="quote-line"><span>Precio Unitario Lista:</span> <span>$${product.listPrice.toFixed(2)} USD</span></div>
+      <div class="quote-line"><span>Descuento Inicial (${Math.round(baseDiscount*100)}%):</span> <span>-$${discountVal.toFixed(2)} USD</span></div>
+      <div class="quote-line total"><span>Total Cotizado:</span> <span>$${total.toFixed(2)} USD</span></div>
+    </div>
+    
+    <p style="margin-top: 0.8rem; font-size: 0.85rem; color: var(--accent-cyan);"><i class="fa-solid fa-comments"></i> <em>¿Desea negociar un descuento comercial adicional para cerrar la orden hoy?</em></p>
+  `;
+  
+  appendAgentMessage(html);
+  
+  // Actualizar métricas
+  updateCFOkpis({ 
+    speed: '12 seg', // Velocidad Comercial pasa de 48h a 12 seg!
+    conversion: 5.5
+  });
+}
+
+// Proceso de personalización según el Rol B2B en caliente
+function explainB2BPersonalization() {
+  const role = state.b2b.role;
+  const product = state.b2b.activeProduct;
+  const subtotal = product.listPrice * state.b2b.quantity;
+
+  addTrace('interpreta', 'Adaptación Contextual de Rol', `El interlocutor cambió a [${role.toUpperCase()}]. Re-estructurando presentación de valor.`);
+  
+  let details = "";
+  if (role === 'decisor') {
+    details = `Análisis de Negocio para el **Decisor (CFO/Director)**: Foco en ROI y productividad comercial.`;
+  } else if (role === 'compras') {
+    details = `Análisis de Compras: Foco en costos unitarios, plazos de pago (${window.Catalog.b2bClients[state.b2b.clientKey].paymentTerms}) y descuentos.`;
+  } else if (role === 'tecnico') {
+    details = `Ficha de Homologación Técnica: Arquitectura e integraciones del equipo.`;
+  }
+  
+  addTrace('recomienda', 'Personalización de Contenido', details);
+}
+
+// MOTOR DE NEGOCIACIÓN B2B CON GUARDRAILS DE MARGEN
+function executeB2BNegotiation(requestedDiscount) {
+  const clientInfo = window.Catalog.b2bClients[state.b2b.clientKey];
+  const product = state.b2b.activeProduct;
+  const qty = state.b2b.quantity;
+  
+  addTrace('interpreta', 'Negociación - Análisis de Descuento', `Cliente solicita descuento del ${Math.round(requestedDiscount*100)}% en la cotización.`);
+
+  const listPriceTotal = product.listPrice * qty;
+  const costTotal = product.cost * qty;
+  
+  // Calcular precio propuesto y margen resultante
+  const proposedPriceTotal = listPriceTotal * (1 - requestedDiscount);
+  const calculatedMargin = (proposedPriceTotal - costTotal) / proposedPriceTotal;
+
+  addTrace('consulta', 'Guardrails - Rentabilidad', `Costo Total: $${costTotal} USD | Precio Propuesto: $${proposedPriceTotal} USD | Margen Estimado: ${Math.round(calculatedMargin*100)}% (Límite Mín: ${window.Catalog.rules.absoluteMinMargin*100}%)`);
+
+  // Regla 1: Violar margen absoluto mínimo corporativo (Ej: margen cae abajo del 15%)
+  if (calculatedMargin < window.Catalog.rules.absoluteMinMargin) {
+    addTrace('alerta', 'Guardrail Infringido', `El descuento solicitado del ${Math.round(requestedDiscount*100)}% dejaría un margen del ${Math.round(calculatedMargin*100)}%, inferior al mínimo absoluto de la compañía (${window.Catalog.rules.absoluteMinMargin*100}%). Operación rechazada.`);
+    
+    // Proponer descuento máximo que sí respete el margen mínimo
+    // proposedPrice = costTotal / (1 - minMargin)
+    const maxViablePrice = costTotal / (1 - window.Catalog.rules.absoluteMinMargin);
+    const maxViableDiscount = (listPriceTotal - maxViablePrice) / listPriceTotal;
+    
+    const finalAllowedDiscount = Math.floor(maxViableDiscount * 100) / 100;
+    const finalTotal = listPriceTotal * (1 - finalAllowedDiscount);
+
+    let html = `
+      <p>⚠️ **Solicitud de Descuento Excedida**</p>
+      <p>No puedo autorizar un descuento del **${Math.round(requestedDiscount*100)}%** debido a las políticas de rentabilidad y margen mínimo sobre la línea ${product.category}.</p>
+      <p>Sin embargo, para cerrar el acuerdo hoy, mi sistema me permite otorgarle un **descuento máximo del ${Math.round(finalAllowedDiscount*100)}%** con aprobación inmediata.</p>
+      
+      <div class="quote-sheet">
+        <div class="quote-line"><span>Producto:</span> <span>${product.name}</span></div>
+        <div class="quote-line"><span>Cantidad:</span> <span>${qty} un.</span></div>
+        <div class="quote-line"><span>Precio Unitario Lista:</span> <span>$${product.listPrice.toFixed(2)} USD</span></div>
+        <div class="quote-line"><span>Descuento Máximo (${Math.round(finalAllowedDiscount*100)}%):</span> <span>-$${(listPriceTotal * finalAllowedDiscount).toFixed(2)} USD</span></div>
+        <div class="quote-line total" style="color: var(--warning);"><span>Total Final Viable:</span> <span>$${finalTotal.toFixed(2)} USD</span></div>
+      </div>
+      <button class="send-btn" style="margin-top: 0.8rem; background: var(--success); color: var(--bg-primary);" onclick="approveB2BQuote('${state.b2b.quoteNumber}', ${finalTotal})">Confirmar Compra</button>
+    `;
+    
+    appendAgentMessage(html);
+    return;
+  }
+
+  // Regla 2: Dentro del margen, pero supera la autonomía máxima del agente para esa cuenta
+  if (requestedDiscount > clientInfo.maxAutoDiscount) {
+    addTrace('alerta', 'Guardrail de Autonomía Excedido', `Descuento solicitado (${Math.round(requestedDiscount*100)}%) es mayor al límite autorizado para el agente en esta cuenta (${Math.round(clientInfo.maxAutoDiscount*100)}%). Requiere aprobación humana.`);
+    
+    let html = `
+      <p>👨‍💼 **Escalación a Humano-en-el-Loop (Aprobación Requerida)**</p>
+      <p>El descuento del **${Math.round(requestedDiscount*100)}%** es viable financieramente para nuestra compañía, pero supera mi nivel de autorización autónoma para cuentas de nivel **${clientInfo.tier}**.</p>
+      <p>He enviado una **solicitud de validación express** a tu Ejecutivo de Cuentas. Responderá a través de este chat en menos de 5 minutos.</p>
+    `;
+    appendAgentMessage(html);
+
+    // Simular aprobación humana después de 3 segundos
+    setTimeout(() => {
+      addTrace('ejecuta', 'Aprobación Humana Recibida', `El Ejecutivo de cuentas aprobó manualmente el presupuesto ${state.b2b.quoteNumber} con ${Math.round(requestedDiscount*100)}% de descuento.`);
+      appendSystemAlert(`<strong>Ejecutivo de Cuentas (Humano)</strong> aprobó el descuento del ${Math.round(requestedDiscount*100)}%.`);
+      
+      const discountedTotal = listPriceTotal * (1 - requestedDiscount);
+      let approvedHtml = `
+        <p>✅ **Cotización Aprobada por Ejecutivo**</p>
+        <p>Se ha emitido la actualización de la cotización **${state.b2b.quoteNumber}** con el **${Math.round(requestedDiscount*100)}%** de descuento solicitado.</p>
+        
+        <div class="quote-sheet">
+          <div class="quote-line"><span>Descuento Especial (${Math.round(requestedDiscount*100)}%):</span> <span>-$${(listPriceTotal * requestedDiscount).toFixed(2)} USD</span></div>
+          <div class="quote-line total"><span>Total Aprobado:</span> <span>$${discountedTotal.toFixed(2)} USD</span></div>
+        </div>
+        <button class="send-btn" style="margin-top: 0.8rem; background: var(--success); color: var(--bg-primary);" onclick="approveB2BQuote('${state.b2b.quoteNumber}', ${discountedTotal})">Aceptar y Enviar al ERP</button>
+      `;
+      appendAgentMessage(approvedHtml);
+    }, 3000);
+    return;
+  }
+
+  // Regla 3: Descuento autorizado automáticamente
+  state.b2b.currentDiscount = requestedDiscount;
+  const finalTotal = listPriceTotal * (1 - requestedDiscount);
+  
+  addTrace('negocia', 'Aprobación Autónoma', `Descuento del ${Math.round(requestedDiscount*100)}% autorizado directamente por el agente. Dentro de los márgenes y nivel de cuenta.`);
+  
+  let html = `
+    <p>🤝 **Descuento Autorizado Automáticamente**</p>
+    <p>He ajustado tu cotización **${state.b2b.quoteNumber}** aplicando el descuento solicitado del **${Math.round(requestedDiscount*100)}%** de manera inmediata.</p>
+    
+    <div class="quote-sheet">
+      <div class="quote-line"><span>Producto:</span> <span>${product.name}</span></div>
+      <div class="quote-line"><span>Cantidad:</span> <span>${qty} un.</span></div>
+      <div class="quote-line"><span>Precio Unitario Lista:</span> <span>$${product.listPrice.toFixed(2)} USD</span></div>
+      <div class="quote-line"><span>Descuento Comercial (${Math.round(requestedDiscount*100)}%):</span> <span>-$${(listPriceTotal * requestedDiscount).toFixed(2)} USD</span></div>
+      <div class="quote-line total"><span>Total Neto:</span> <span>$${finalTotal.toFixed(2)} USD</span></div>
+    </div>
+    <button class="send-btn" style="margin-top: 0.8rem; background: var(--success); color: var(--bg-primary);" onclick="approveB2BQuote('${state.b2b.quoteNumber}', ${finalTotal})">Aceptar y Enviar al ERP</button>
+  `;
+  appendAgentMessage(html);
+}
+
+// Aprobación final y envío al ERP
+function approveB2BQuote(quoteNum, total) {
+  addTrace('ejecuta', 'Agente -> Sistema (ERP)', `Enviando orden de compra generada de cotización ${quoteNum} al ERP para facturación y asignación de stock.`);
+  appendSystemAlert(`Enviando Orden de Compra al ERP...`);
+  
+  setTimeout(() => {
+    addTrace('ejecuta', 'Fulfillment Trigger', `Notificando a Sistema de Almacén (WMS) para preparar el envío de la orden.`);
+    appendAgentMessage(`🎉 **¡Orden Confirmada!** Hemos generado la orden de compra en tu ERP. Los equipos están reservados en el almacén. Recibirás la factura de manera electrónica.`);
+    
+    updateCFOkpis({ 
+      conversion: 18.5, 
+      nps: 65, 
+      reorder: 25 // Sube la recompra porque facilitamos el proceso
+    });
+  }, 1000);
+}
+
+// -------------------------------------------------------------
+// SIMULACIÓN DE ALMACÉN & LOGÍSTICA (PICKING CANVAS)
+// -------------------------------------------------------------
+let canvas, ctx;
+let pickingBot = { x: 50, y: 50 };
+let pickItems = [];
+let routePoints = [];
+let animationFrameId = null;
+let isPicking = false;
+
+function setupWarehouseCanvas() {
+  canvas = document.getElementById('warehouse-canvas');
+  ctx = canvas.getContext('2d');
+  
+  // Adaptar dimensiones reales del canvas al contenedor
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight || 280;
+}
+
+// Redibujar la grilla del almacén
+function drawWarehouseGrid(path) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const cols = 8;
+  const rows = 4;
+  const w = canvas.width / (cols + 1);
+  const h = canvas.height / (rows + 1);
+
+  // Dibujar Estanterías (Pasillos de picking)
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1;
+
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      if (c % 2 !== 0) { // Dejar pasillos entre columnas de estanterías
+        ctx.fillRect(c * w - w/4, r * h - h/4, w/2, h/2);
+        ctx.strokeRect(c * w - w/4, r * h - h/4, w/2, h/2);
+      }
+    }
+  }
+
+  // Dibujar Ruta de Picking si existe
+  if (path && path.length > 0) {
+    ctx.strokeStyle = 'rgba(0, 210, 255, 0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) {
+      ctx.lineTo(path[i].x, path[i].y);
+    }
+    ctx.stroke();
+  }
+
+  // Dibujar Ítems a recolectar
+  pickItems.forEach(item => {
+    ctx.fillStyle = item.collected ? 'rgba(16, 185, 129, 0.4)' : '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // Borde brillante
+    ctx.strokeStyle = item.collected ? 'var(--success)' : 'var(--warning)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // Dibujar Bot del Operador (Picker)
+  ctx.fillStyle = '#00d2ff';
+  ctx.beginPath();
+  ctx.arc(pickingBot.x, pickingBot.y, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+// Simular el Algoritmo de Picking Óptimo (TSP / Greedy)
+function startPickingDemo() {
+  if (isPicking) return;
+  isPicking = true;
+  
+  document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); color: var(--warning);">Orquestando...</span>`;
+  
+  const cols = 8;
+  const rows = 4;
+  const w = canvas.width / (cols + 1);
+  const h = canvas.height / (rows + 1);
+
+  // Inicializar Bot de Picking en la Bahía de salida
+  pickingBot = { x: w/2, y: h/2 };
+
+  // Generar 5 ítems aleatorios de picking en los pasillos de estanterías
+  pickItems = [];
+  for (let i = 0; i < 5; i++) {
+    const r = Math.floor(1 + Math.random() * rows);
+    const c = Math.floor(1 + Math.random() * cols);
+    // Asegurar que queden en pasillos
+    const pasilloCol = c % 2 === 0 ? c : c + 1;
+    pickItems.push({
+      id: i,
+      x: pasilloCol * w - w/2,
+      y: r * h,
+      collected: false
+    });
+  }
+
+  addTrace('interpreta', 'Orquestación de Pedidos WMS', 'Recibido lote de picking para preparación. Analizando posiciones óptimas.');
+  addTrace('consulta', 'Cálculo de Ruta Óptima', 'Calculando el camino más corto del recolector (Resolución del problema del viajante heurística).');
+
+  // Ordenar ítems por cercanía para el bot (algoritmo greedy simple)
+  let currentPos = { x: pickingBot.x, y: pickingBot.y };
+  let remainingItems = [...pickItems];
+  routePoints = [ { x: currentPos.x, y: currentPos.y } ];
+
+  while (remainingItems.length > 0) {
+    // Buscar el más cercano
+    let closestIndex = 0;
+    let minDistance = Infinity;
+    for (let i = 0; i < remainingItems.length; i++) {
+      const dist = Math.hypot(remainingItems[i].x - currentPos.x, remainingItems[i].y - currentPos.y);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestIndex = i;
+      }
+    }
+    const nextItem = remainingItems.splice(closestIndex, 1)[0];
+    routePoints.push(nextItem);
+    currentPos = { x: nextItem.x, y: nextItem.y };
+  }
+  
+  // Volver a la bahía de salida
+  routePoints.push({ x: w/2, y: h/2 });
+
+  // Animación del movimiento del bot a lo largo de la ruta
+  let pointIndex = 0;
+  
+  function animate() {
+    if (pointIndex >= routePoints.length) {
+      // Finalizado
+      isPicking = false;
+      document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: var(--success);">Listo</span>`;
+      addTrace('ejecuta', 'Picking Completado', 'Todos los ítems recolectados con éxito. Ruta optimizada en un 38% vs. ruta lineal.');
+      updateCFOkpis({ 
+        cost: 65, // Reducción de costos de picking de warehouse (-35%)
+      });
+      return;
+    }
+
+    const target = routePoints[pointIndex];
+    const dx = target.x - pickingBot.x;
+    const dy = target.y - pickingBot.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < 4) {
+      // Llegó al punto
+      pickingBot.x = target.x;
+      pickingBot.y = target.y;
+      
+      // Marcar item como recolectado
+      const matchedItem = pickItems.find(item => item.x === target.x && item.y === target.y);
+      if (matchedItem && !matchedItem.collected) {
+        matchedItem.collected = true;
+        addTrace('ejecuta', 'Ítem Recolectado', `Operador recolectó el producto en la posición (${Math.round(target.x)}, ${Math.round(target.y)}).`);
+      }
+      
+      pointIndex++;
+    } else {
+      // Mover hacia el objetivo
+      pickingBot.x += (dx / dist) * 3;
+      pickingBot.y += (dy / dist) * 3;
+    }
+
+    drawWarehouseGrid(routePoints.slice(0, pointIndex + 1));
+    animationFrameId = requestAnimationFrame(animate);
+  }
+
+  animate();
+}
+
+// Simular Procesamiento Automatizado de Devoluciones (Excepciones logísticas)
+function startReturnsDemo() {
+  if (isPicking) return;
+  
+  addTrace('interpreta', 'Recepción de Devolución', 'Cliente B2C solicita devolución de producto RUN-001 por talle incorrecto.');
+  addTrace('consulta', 'OMS & Política de Retornos', 'Validando plazo de compra (14 días). Compra realizada hace 3 días. Permitido.');
+  addTrace('ejecuta', 'Generación de RMA', 'Generando ticket de retorno automatizado. Notificando a correo del cliente.');
+  
+  setTimeout(() => {
+    addTrace('ejecuta', 'Actualización de Inventario', 'Agente instruye al WMS a reservar un casillero para restock del producto retornado. Stock incrementado.');
+    updateCFOkpis({ nps: 78 }); // Sube el NPS por posventa proactiva y veloz
+  }, 1500);
+}
+
+// -------------------------------------------------------------
+// ACTUALIZACIÓN DE GRÁFICOS Y MÉTRICAS DEL CFO
+// -------------------------------------------------------------
+function updateCFOkpis(newKpis) {
+  Object.keys(newKpis).forEach(key => {
+    state.kpis[key] = newKpis[key];
+  });
+
+  // Renderizar valores en el DOM
+  // 1. Conversión
+  const conversionEl = document.getElementById('kpi-conversion');
+  const convProgress = document.getElementById('progress-conversion');
+  const convDiff = document.getElementById('kpi-conversion-diff');
+  
+  conversionEl.innerText = `${state.kpis.conversion.toFixed(1)}%`;
+  convProgress.style.width = `${state.kpis.conversion * 5}%`; // escala representativa
+  if (state.kpis.conversion > 2.4) {
+    convDiff.innerHTML = `<i class="fa-solid fa-arrow-up"></i> +${(state.kpis.conversion - 2.4).toFixed(1)}%`;
+    convDiff.className = "kpi-diff up";
+  }
+
+  // 2. Velocidad de Cotización
+  const speedEl = document.getElementById('kpi-speed');
+  const speedProgress = document.getElementById('progress-speed');
+  const speedDiff = document.getElementById('kpi-speed-diff');
+  
+  speedEl.innerText = state.kpis.speed;
+  if (state.kpis.speed === '12 seg') {
+    speedProgress.style.width = '95%';
+    speedDiff.innerHTML = `<i class="fa-solid fa-bolt"></i> Inmediato`;
+    speedDiff.style.color = 'var(--success)';
+  }
+
+  // 3. Recompra Predictiva
+  const reorderEl = document.getElementById('kpi-reorder');
+  const reorderProgress = document.getElementById('progress-reorder');
+  const reorderDiff = document.getElementById('kpi-reorder-diff');
+  
+  reorderEl.innerText = `${state.kpis.reorder}%`;
+  reorderProgress.style.width = `${state.kpis.reorder}%`;
+  if (state.kpis.reorder > 0) {
+    reorderDiff.innerHTML = `<i class="fa-solid fa-arrow-up"></i> +${state.kpis.reorder}%`;
+    reorderDiff.className = "kpi-diff up";
+  }
+
+  // 4. Costo de Picking
+  const costEl = document.getElementById('kpi-cost');
+  const costProgress = document.getElementById('progress-cost');
+  const costDiff = document.getElementById('kpi-cost-diff');
+  
+  costEl.innerText = `${state.kpis.cost}%`;
+  costProgress.style.width = `${state.kpis.cost}%`;
+  if (state.kpis.cost < 100) {
+    costDiff.innerHTML = `<i class="fa-solid fa-arrow-down"></i> -${100 - state.kpis.cost}%`;
+    costDiff.className = "kpi-diff down";
+  }
+
+  // 5. NPS Posventa
+  const npsEl = document.getElementById('kpi-nps');
+  const npsProgress = document.getElementById('progress-nps');
+  const npsDiff = document.getElementById('kpi-nps-diff');
+  
+  npsEl.innerText = `+${state.kpis.nps}`;
+  npsProgress.style.width = `${state.kpis.nps}%`;
+  if (state.kpis.nps > 45) {
+    npsDiff.innerHTML = `<i class="fa-solid fa-plus"></i> +${state.kpis.nps - 45}`;
+    npsDiff.className = "kpi-diff up";
+  }
+}
