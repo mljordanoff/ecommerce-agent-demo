@@ -1,5 +1,11 @@
 // Lógica del Simulador del Agente de E-Commerce (baufest 2026)
 
+const DEFAULT_ORDERS = [
+  { id: "ORD-10492", time: "Hoy 08:30", channel: "B2C", client: "g.gomez@gmail.com", items: "1x SpeedTrail Pro", total: 150.00, status: "Facturado" },
+  { id: "ORD-10493", time: "Hoy 09:15", channel: "B2B", client: "Global Tech Solutions", items: "15x FlexMonitor 24\"", total: 2619.00, status: "En Proceso" },
+  { id: "ORD-10494", time: "Hoy 10:02", channel: "B2C", client: "m.rodriguez@gmail.com", items: "1x UltraBoost Nova 2026", total: 180.00, status: "Facturado" }
+];
+
 // Estado Global de la Simulación
 let state = {
   currentMode: 'b2c',
@@ -22,7 +28,9 @@ let state = {
     reorder: 0,
     cost: 100,
     nps: 45
-  }
+  },
+  // Base de datos de órdenes (simulada)
+  orders: []
 };
 
 // Configuración de los Prompts Sugeridos por Modo
@@ -53,8 +61,24 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initApp() {
+  // Cargar órdenes de localStorage o inicializar con las default
+  const storedOrders = localStorage.getItem('baufest_sim_orders');
+  if (storedOrders) {
+    try {
+      state.orders = JSON.parse(storedOrders);
+    } catch (e) {
+      console.error("Error al decodificar órdenes guardadas, usando por defecto.", e);
+      state.orders = [...DEFAULT_ORDERS];
+      localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
+    }
+  } else {
+    state.orders = [...DEFAULT_ORDERS];
+    localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
+  }
+
   switchMode('b2c');
   setupWarehouseCanvas();
+  renderOrdersTable();
 }
 
 // Cambiar de Modo (B2C, B2B, Logística)
@@ -452,8 +476,12 @@ function checkoutB2C() {
     addTrace('ejecuta', 'Transacción ERP/OMS', `Generando orden de venta en ERP por $${total.toFixed(2)} USD. Pago aprobado.`);
     addTrace('ejecuta', 'Registro en CRM', 'Orden registrada con éxito. Estado: Completada.');
 
-    appendAgentMessage(`🚀 **¡Compra finalizada con éxito!** Se ha procesado tu orden por un total de **$${total.toFixed(2)} USD**. Tu pedido ya se está preparando en el centro de distribución. El comprobante y la factura electrónica fueron enviados a tu correo: **mljordanoff@baufest.com**.`);
+    appendAgentMessage(`🚀 **¡Compra finalizada con éxito!** Se ha procesado tu orden por un total de **$${total.toFixed(2)} USD**. Tu pedido ya se está preparando en el centro de distribución. El comprobante y la factura electrónica fueron enviados a tu correo: **laura.jordanoff@baufest.com**.`);
     
+    // Registrar la orden en la base de datos simulada
+    const itemsList = state.b2cCart.map(item => `${item.quantity}x ${item.name}`).join(", ");
+    registerOrder("B2C", "laura.jordanoff@baufest.com", itemsList, total);
+
     // Vaciar carrito
     state.b2cCart = [];
 
@@ -708,6 +736,7 @@ function executeB2BNegotiation(requestedDiscount) {
 
 // Aprobación final y envío al ERP
 function approveB2BQuote(quoteNum, total) {
+  const clientInfo = window.Catalog.b2bClients[state.b2b.clientKey];
   // Mapeo de correos según la cuenta seleccionada
   const emails = {
     "CLI-GLOBAL-TECH": "billing@globaltech.com",
@@ -723,6 +752,9 @@ function approveB2BQuote(quoteNum, total) {
     addTrace('ejecuta', 'Fulfillment Trigger', `Notificando a Sistema de Almacén (WMS) para preparar el envío de la orden.`);
     appendAgentMessage(`🎉 **¡Orden Confirmada!** Hemos generado la orden de compra en tu ERP. Los equipos están reservados en el almacén. La factura electrónica ha sido enviada al correo registrado de la cuenta: **${email}**.`);
     
+    // Registrar la orden en la base de datos simulada
+    registerOrder("B2B", clientInfo.name, `${state.b2b.quantity}x ${state.b2b.activeProduct.name}`, total);
+
     updateCFOkpis({ 
       conversion: 18.5, 
       nps: 65, 
@@ -991,5 +1023,73 @@ function updateCFOkpis(newKpis) {
   if (state.kpis.nps > 45) {
     npsDiff.innerHTML = `<i class="fa-solid fa-plus"></i> +${state.kpis.nps - 45}`;
     npsDiff.className = "kpi-diff up";
+  }
+}
+
+// =============================================================
+// GESTIÓN DE BASE DE DATOS TRANSACCIONAL SIMULADA
+// =============================================================
+
+// Registrar una nueva orden en la base de datos
+function registerOrder(channel, client, items, total) {
+  const orderId = `ORD-${Math.floor(10500 + Math.random() * 9000)}`;
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  
+  // Agregar al inicio del arreglo
+  state.orders.unshift({
+    id: orderId,
+    time: `Hoy ${timeStr}`,
+    channel: channel,
+    client: client,
+    items: items,
+    total: total,
+    status: "Facturado",
+    isNew: true // Flag para activar la animación de resalte
+  });
+
+  // Guardar en localStorage
+  localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
+
+  renderOrdersTable();
+  addTrace('ejecuta', 'Base de Datos (ERP)', `Registro ID ${orderId} escrito en la Base de Datos transaccional.`);
+}
+
+// Renderizar la tabla de órdenes
+function renderOrdersTable() {
+  const body = document.getElementById('db-orders-body');
+  const counter = document.getElementById('db-counter');
+  if (!body) return;
+
+  body.innerHTML = '';
+  counter.innerText = `${state.orders.length} Registros`;
+
+  state.orders.forEach(order => {
+    const tr = document.createElement('tr');
+    if (order.isNew) {
+      tr.className = 'new-row';
+      order.isNew = false; // Resetear para futuros renders
+    }
+    
+    tr.innerHTML = `
+      <td style="font-family: var(--font-mono); font-weight: 600;">${order.id}</td>
+      <td>${order.time}</td>
+      <td><span class="db-badge ${order.channel.toLowerCase()}">${order.channel}</span></td>
+      <td><strong>${order.client}</strong></td>
+      <td style="font-size: 0.8rem; color: var(--text-secondary);">${order.items}</td>
+      <td style="font-weight: 600; color: var(--success);">$${order.total.toFixed(2)}</td>
+      <td><span class="db-badge status-ok"><i class="fa-solid fa-check"></i> ${order.status}</span></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+// Restablecer la base de datos simulada a los valores predeterminados
+function resetSimulatedDatabase() {
+  if (confirm("¿Estás seguro de que deseas limpiar la base de datos simulada y restablecer los registros de ejemplo?")) {
+    state.orders = [...DEFAULT_ORDERS];
+    localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
+    renderOrdersTable();
+    addTrace('alerta', 'Base de Datos (ERP)', 'Base de datos transaccional restablecida a valores predeterminados.');
   }
 }

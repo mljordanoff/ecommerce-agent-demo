@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Baufest Agentic E-Commerce - Simulador Interactiva v2026</title>
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=5">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -178,6 +178,37 @@
         </div>
 
       </div>
+
+      <!-- Base de Datos de Órdenes Simulada -->
+      <div class="db-section" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--accent-cyan); font-family: var(--font-sans);"><i class="fa-solid fa-database"></i> Base de Datos Transaccional (ERP/CRM Real-Time Log)</h4>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button onclick="resetSimulatedDatabase()" class="logo-badge" style="background: rgba(254, 226, 226, 0.05); border-color: rgba(239, 68, 68, 0.3); color: var(--danger); cursor: pointer; outline: none; transition: var(--transition-smooth);">
+              <i class="fa-solid fa-trash-can"></i> Limpiar BD
+            </button>
+            <span class="logo-badge" id="db-counter" style="background: rgba(37, 99, 235, 0.1); border-color: rgba(37, 99, 235, 0.2); color: var(--accent-blue);">3 Registros</span>
+          </div>
+        </div>
+        <div style="overflow-x: auto; max-height: 200px; overflow-y: auto;">
+          <table class="db-table" id="db-orders-table">
+            <thead>
+              <tr>
+                <th>ID Orden</th>
+                <th>Fecha/Hora</th>
+                <th>Canal</th>
+                <th>Cliente / Cuenta</th>
+                <th>Detalle de Productos</th>
+                <th>Total (USD)</th>
+                <th>Estado ERP</th>
+              </tr>
+            </thead>
+            <tbody id="db-orders-body">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -187,7 +218,7 @@
   </footer>
 
   <!-- Scripts -->
-  <script src="catalog.js?v=2"></script>
-  <script src="app.js?v=4"></script>
+  <script src="catalog.js?v=3"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
