@@ -146,9 +146,11 @@ function switchMode(mode) {
     addTrace('interpreta', 'Contexto Almacén (WMS)', 'Iniciando módulo de optimización de operaciones de picking y devoluciones.');
     addTrace('consulta', 'Conexión WMS/ERP', 'Conectado a inventarios físicos y mapa tridimensional de estanterías del depósito.');
     
-    // Medir y configurar el canvas ahora que el panel es visible (display: flex)
-    setupWarehouseCanvas();
-    drawWarehouseGrid(null); // Dibujar mapa de almacén estático inicial
+    // Medir y configurar el canvas con un leve retraso para permitir la recálculo de diseño del navegador
+    setTimeout(() => {
+      setupWarehouseCanvas();
+      drawWarehouseGrid(null); // Dibujar mapa de almacén estático inicial
+    }, 50);
   }
 }
 
@@ -788,8 +790,12 @@ function setupWarehouseCanvas() {
   ctx = canvas.getContext('2d');
   
   // Adaptar dimensiones reales del canvas al contenedor
-  canvas.width = canvas.parentElement.clientWidth;
-  canvas.height = canvas.parentElement.clientHeight || 280;
+  // Si clientWidth mide 0 debido a un retraso de layout, usamos 600px de ancho y 280px de alto por defecto
+  const width = canvas.parentElement.clientWidth || 600;
+  const height = canvas.parentElement.clientHeight || 280;
+  
+  canvas.width = width;
+  canvas.height = height;
 }
 
 // Redibujar la grilla del almacén
