@@ -898,6 +898,14 @@ function drawWarehouseGrid(path) {
   ctx.fillText('Bahía Despacho', w/2, h/2 - 12);
   ctx.fillText('Dock Devoluciones', w/2, canvas.height - h/2 + 20);
 
+  // Dibujar Nombres de Estanterías (Pasillos / Categorías de productos)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.font = 'bold 8.5px var(--font-sans)';
+  ctx.fillText('ESTANTE A (Calzado)', 1 * w, 15);
+  ctx.fillText('ESTANTE B (Outdoor)', 3 * w, 15);
+  ctx.fillText('ESTANTE C (Laptops)', 5 * w, 15);
+  ctx.fillText('ESTANTE D (Servidores)', 7 * w, 15);
+
   // Dibujar Ruta de Picking si existe
   if (path && path.length > 0) {
     ctx.strokeStyle = 'rgba(0, 210, 255, 0.6)';
@@ -1044,19 +1052,31 @@ function startReturnsDemo() {
   if (isPicking) return;
   isPicking = true;
   
-  document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); color: var(--accent-purple);">Procesando Retorno...</span>`;
-  
   const cols = 8;
   const rows = 4;
   const w = canvas.width / (cols + 1);
   const h = canvas.height / (rows + 1);
+
+  // Lista de ítems retornables para simulación aleatoria
+  const RETURNABLE_ITEMS = [
+    { name: "SpeedTrail Pro", price: 150.00, col: 1, shelfName: "Estante A (Calzado)", channel: "B2C", client: "mljordanoff@baufest.com", reason: "por talle incorrecto" },
+    { name: "UltraBoost Nova 2026", price: 180.00, col: 1, shelfName: "Estante A (Calzado)", channel: "B2C", client: "mljordanoff@baufest.com", reason: "por disconformidad con amortiguación" },
+    { name: "Mochila Explorer 45L", price: 120.00, col: 3, shelfName: "Estante B (Outdoor)", channel: "B2C", client: "mljordanoff@baufest.com", reason: "por color incorrecto" },
+    { name: "SmartFit Band X", price: 99.00, col: 3, shelfName: "Estante B (Outdoor)", channel: "B2C", client: "mljordanoff@baufest.com", reason: "por detalle estético" },
+    { name: "Notebook ThinkWork Pro", price: 1200.00, col: 5, shelfName: "Estante C (Laptops)", channel: "B2B", client: "Global Tech Solutions", reason: "por excedente de proyecto" }
+  ];
+
+  const chosenItem = RETURNABLE_ITEMS[Math.floor(Math.random() * RETURNABLE_ITEMS.length)];
+  const randomRow = Math.floor(1 + Math.random() * rows);
+
+  document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); color: var(--accent-purple);">Retorno: ${chosenItem.name}</span>`;
 
   // Posición inicial del bot (Bahía de salida)
   pickingBot = { x: w/2, y: h/2 };
   
   // Definir la bahía de recepción (Dock de Devoluciones) y la estantería de restock
   const returnDock = { x: w/2, y: canvas.height - h/2 };
-  const restockShelf = { x: 5 * w - w/2, y: 2 * h }; // Fila 2, pasillo de la col 5
+  const restockShelf = { x: chosenItem.col * w - w/2, y: randomRow * h };
   
   // Representar el ítem retornado en el Dock (magenta)
   pickItems = [{
@@ -1075,7 +1095,7 @@ function startReturnsDemo() {
     { x: w/2, y: h/2 } // Retorno a base
   ];
 
-  addTrace('interpreta', 'Recepción de Devolución', 'Cliente B2C solicita devolución de producto RUN-001 por talle incorrecto.');
+  addTrace('interpreta', 'Recepción de Devolución', `Cliente ${chosenItem.channel} solicita devolución de ${chosenItem.name} ${chosenItem.reason}.`);
   addTrace('consulta', 'OMS & Política de Retornos', 'Validando plazo de compra (14 días). Compra realizada hace 3 días. Permitido.');
   addTrace('ejecuta', 'Generación de RMA', 'Generando ticket de retorno automatizado. Notificando a correo del cliente.');
 
@@ -1086,10 +1106,10 @@ function startReturnsDemo() {
       isPicking = false;
       document.getElementById('picking-status').innerHTML = `<span class="logo-badge" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: var(--success);">Listo</span>`;
       
-      addTrace('ejecuta', 'Devolución Completada', 'Producto devuelto reintegrado al inventario físico en estantería (R-05-F2) y disponible para la venta.');
+      addTrace('ejecuta', 'Devolución Completada', `Producto ${chosenItem.name} reintegrado al inventario físico en ${chosenItem.shelfName} (Fila ${randomRow}) y disponible para la venta.`);
       
       // Registrar la devolución en la base de datos simulada (monto negativo, prefijo RET y estado Devuelto)
-      registerOrder("B2C", "mljordanoff@baufest.com", "1x SpeedTrail Pro (Devolución)", -150.00, "Devuelto", "RET");
+      registerOrder(chosenItem.channel, chosenItem.client, `1x ${chosenItem.name} (Devolución)`, -chosenItem.price, "Devuelto", "RET");
       
       updateCFOkpis({ nps: 78 }); // Sube el NPS por posventa proactiva y veloz
       return;
@@ -1109,10 +1129,10 @@ function startReturnsDemo() {
         const item = pickItems.find(i => i.isReturn);
         if (item && !item.collected) {
           item.collected = true;
-          addTrace('ejecuta', 'Recepción en Dock', 'Robot recolectó el producto retornado en la bahía de carga.');
+          addTrace('ejecuta', 'Recepción en Dock', `Robot recolectó el producto retornado en la bahía de carga.`);
         }
       } else if (pointIndex === 2) { // Llegó a la estantería a colocar el producto
-        addTrace('ejecuta', 'Restock en Estantería', 'Robot colocó el producto en la estantería de destino. Casillero R-05-F2 actualizado en WMS y stock incrementado.');
+        addTrace('ejecuta', 'Restock en Estantería', `Robot colocó el producto en la estantería de destino. Casillero ${chosenItem.shelfName} - Fila ${randomRow} actualizado en WMS y stock incrementado.`);
         pickItems = []; // Limpiar para que desaparezca
       }
       
