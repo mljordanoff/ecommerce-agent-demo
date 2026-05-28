@@ -569,6 +569,21 @@ function handleB2BInput(text) {
     return;
   }
 
+  // Confirmar orden o rechazar negociación de descuento adicional (Aceptar cotización base)
+  if ((query === 'no' || query === 'no gracias' || query === 'confirmar' || query === 'aceptar' || query === 'comprar' || query === 'aprobar' || query === 'no negociar' || query === 'no quiero') && state.b2b.activeProduct) {
+    state.b2b.negotiating = false;
+    const clientInfo = window.Catalog.b2bClients[state.b2b.clientKey];
+    const product = state.b2b.activeProduct;
+    const qty = state.b2b.quantity;
+    const subtotal = product.listPrice * qty;
+    const discountVal = subtotal * state.b2b.currentDiscount;
+    const total = subtotal - discountVal;
+    
+    addTrace('ejecuta', 'Confirmación Directa', 'Cliente decide no negociar descuentos adicionales y aprueba la cotización base.');
+    approveB2BQuote(state.b2b.quoteNumber, total);
+    return;
+  }
+
   let selected = null;
   let qty = 0;
 
@@ -661,6 +676,10 @@ function calculateAndRenderQuote() {
       <div class="quote-line"><span>Precio Unitario Lista:</span> <span>$${product.listPrice.toFixed(2)} USD</span></div>
       <div class="quote-line"><span>Descuento Inicial (${Math.round(baseDiscount*100)}%):</span> <span>-$${discountVal.toFixed(2)} USD</span></div>
       <div class="quote-line total"><span>Total Cotizado:</span> <span>$${total.toFixed(2)} USD</span></div>
+    </div>
+    
+    <div style="margin-top: 0.8rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <button class="send-btn" style="background: var(--success); color: var(--bg-primary);" onclick="approveB2BQuote('${state.b2b.quoteNumber}', ${total})">Aceptar y Enviar al ERP</button>
     </div>
     
     <p style="margin-top: 0.8rem; font-size: 0.85rem; color: var(--accent-cyan);"><i class="fa-solid fa-comments"></i> <em>¿Desea negociar un descuento comercial adicional para cerrar la orden hoy?</em></p>
