@@ -646,8 +646,13 @@ footer.main-footer a {
   color: #cbd5e1;
 }
 
-.db-table tr:hover {
-  background: rgba(255, 255, 255, 0.01);
+.db-table tbody tr {
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.db-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
 .db-table tr.new-row {
@@ -691,4 +696,25 @@ footer.main-footer a {
   background: rgba(245, 158, 11, 0.1);
   color: var(--warning);
   border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+/* Modal Overlay & Glassmorphic Custom Style */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.afip-invoice {
+  padding: 0.5rem;
 }

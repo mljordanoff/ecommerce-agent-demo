@@ -264,6 +264,27 @@
     <p>baufest &copy; 2026 - Evolving. Business. Together. | Desarrollado para demostración a Stakeholders</p>
   </footer>
 
+  <!-- Modal de Factura Electrónica (Simulado) -->
+  <div id="invoice-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content glass-panel" style="max-width: 500px; width: 90%; background: var(--bg-secondary); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6); padding: 1.5rem; border-radius: 16px;">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-sans);">
+          <i class="fa-solid fa-file-invoice-dollar"></i> Detalle de Factura Electrónica
+        </h3>
+        <button class="close-modal-btn" onclick="closeInvoiceModal()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; line-height: 1; outline: none;">&times;</button>
+      </div>
+      <div class="modal-body" id="invoice-modal-body" style="font-family: var(--font-sans); font-size: 0.85rem; color: #cbd5e1; line-height: 1.5;">
+        <!-- Rellenado dinámicamente -->
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem; margin-top: 1rem;">
+        <button class="send-btn" style="background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border-color);" onclick="printInvoiceSim()">
+          <i class="fa-solid fa-print"></i> Imprimir
+        </button>
+        <button class="send-btn" onclick="closeInvoiceModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="catalog.js?v=3"></script>
   <script src="app.js?v=6"></script>

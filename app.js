@@ -1260,6 +1260,7 @@ function renderOrdersTable() {
 
   state.orders.forEach(order => {
     const tr = document.createElement('tr');
+    tr.setAttribute('onclick', `showInvoiceDetails('${order.id}')`);
     if (order.isNew) {
       tr.className = 'new-row';
       order.isNew = false; // Resetear para futuros renders
@@ -1296,4 +1297,141 @@ function resetSimulatedDatabase() {
     renderOrdersTable();
     addTrace('alerta', 'Base de Datos (ERP)', 'Base de datos transaccional restablecida a valores predeterminados.');
   }
+}
+
+// Mostrar detalles de Factura Electrónica (estilo AFIP)
+function showInvoiceDetails(orderId) {
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  const isRefund = order.status === "Devuelto" || order.status === "Nota de Crédito" || order.total < 0;
+  
+  // Decidir tipo de documento
+  const invoiceType = order.channel === 'B2B' ? 'A' : 'B';
+  const docTitle = isRefund ? `NOTA DE CRÉDITO "${invoiceType}"` : `FACTURA ELECTRÓNICA "${invoiceType}"`;
+  const accentColor = isRefund ? 'var(--warning)' : 'var(--accent-cyan)';
+  
+  // Calcular Neto y 21% de IVA
+  // En Argentina, la factura B o A tiene el IVA desglosado (total = neto * 1.21 => neto = total / 1.21, IVA = total - neto)
+  const totalAbs = Math.abs(order.total);
+  const subtotal = totalAbs / 1.21;
+  const vat = totalAbs - subtotal;
+
+  // Correo del receptor
+  let clientEmail = order.client;
+  let clientName = order.client;
+  if (order.channel === 'B2B') {
+    const clientKey = Object.keys(window.Catalog.b2bClients).find(key => {
+      const c = window.Catalog.b2bClients[key];
+      return c.name === order.client || order.client.includes(c.name) || c.name.includes(order.client);
+    });
+    if (clientKey) {
+      clientName = window.Catalog.b2bClients[clientKey].name;
+      const emails = {
+        "CLI-GLOBAL-TECH": "billing@globaltech.com",
+        "CLI-PAPYRUS-INC": "compras@papyrus.com",
+        "CLI-STARTUP-NEX": "finanzas@nexus.com"
+      };
+      clientEmail = emails[clientKey];
+    } else {
+      clientEmail = "administracion@empresa.com";
+    }
+  }
+
+  // CAE Vencimiento (10 días después de hoy)
+  const today = new Date();
+  const pad = (n) => n.toString().padStart(2, '0');
+  const expirationDate = new Date(today);
+  expirationDate.setDate(today.getDate() + 10);
+  const caeVencimiento = `${pad(expirationDate.getDate())}/${pad(expirationDate.getMonth() + 1)}/${expirationDate.getFullYear()}`;
+
+  const bodyEl = document.getElementById('invoice-modal-body');
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div class="afip-invoice">
+        <!-- Top header -->
+        <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+          <div>
+            <div style="font-size: 1.2rem; font-weight: 800; color: #fff;"><i class="fa-solid fa-robot" style="color: var(--accent-cyan); font-size: 1rem;"></i> baufest</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary);">Baufest Argentina S.A.</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary);">Av. del Libertador 6350, CABA</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary);">CUIT: 30-70809012-9</div>
+          </div>
+          <div style="border: 2px solid ${accentColor}; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 900; color: ${accentColor}; border-radius: 4px; background: rgba(255,255,255,0.02);">
+            ${invoiceType}
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: 700; color: ${accentColor}; font-size: 0.85rem; letter-spacing: 0.5px;">${docTitle}</div>
+            <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem;">${order.id}</div>
+            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.2rem;">Fecha: ${order.time}</div>
+          </div>
+        </div>
+
+        <!-- Client info -->
+        <div style="background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border-color); padding: 0.6rem 0.8rem; border-radius: 8px; margin-bottom: 0.75rem;">
+          <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Receptor / Cliente</div>
+          <div style="font-weight: 600; font-size: 0.85rem; color: #fff; margin-top: 0.15rem;">${clientName}</div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.1rem;">Email: ${clientEmail}</div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary);">Condición IVA: ${order.channel === 'B2B' ? 'Responsable Inscripto' : 'Consumidor Final'}</div>
+        </div>
+
+        <!-- Items list -->
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 1rem;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border-color);">
+              <th style="text-align: left; padding: 0.4rem 0; color: var(--text-secondary); font-weight: 500;">Concepto / Producto</th>
+              <th style="text-align: right; padding: 0.4rem 0; color: var(--text-secondary); font-weight: 500;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px dashed rgba(255, 255, 255, 0.05);">
+              <td style="padding: 0.5rem 0; color: #cbd5e1;">${order.items}</td>
+              <td style="text-align: right; padding: 0.5rem 0; font-family: var(--font-mono); color: #cbd5e1;">${isRefund ? '-' : ''}$${subtotal.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Calculation totals -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; align-items: flex-end; font-size: 0.8rem;">
+          <div style="display: flex; justify-content: space-between; width: 100%; max-width: 240px; color: var(--text-secondary);">
+            <span>Neto Gravado (Excl. IVA):</span>
+            <span style="font-family: var(--font-mono);">${isRefund ? '-' : ''}$${subtotal.toFixed(2)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; width: 100%; max-width: 240px; color: var(--text-secondary);">
+            <span>Alícuota IVA (21.00%):</span>
+            <span style="font-family: var(--font-mono);">${isRefund ? '-' : ''}$${vat.toFixed(2)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; width: 100%; max-width: 240px; font-weight: 700; font-size: 0.95rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.3rem; color: ${accentColor};">
+            <span>Total Facturado:</span>
+            <span style="font-family: var(--font-mono);">${isRefund ? '-' : ''}$${totalAbs.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <!-- CAE certification footer -->
+        <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 0.5rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">
+          <div>CAE Nº: 76192837482938</div>
+          <div>Vto. CAE: ${caeVencimiento}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Mostrar el modal
+  const modalEl = document.getElementById('invoice-modal');
+  if (modalEl) {
+    modalEl.style.display = 'flex';
+  }
+  
+  addTrace('consulta', 'Factura Electrónica', `Recuperada Factura / Nota de Crédito para ${order.id}. CAE verificado con AFIP.`);
+}
+
+function closeInvoiceModal() {
+  const modalEl = document.getElementById('invoice-modal');
+  if (modalEl) {
+    modalEl.style.display = 'none';
+  }
+}
+
+function printInvoiceSim() {
+  alert("Simulando impresión de la Factura Electrónica en PDF...");
 }
