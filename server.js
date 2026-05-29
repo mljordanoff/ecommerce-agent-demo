@@ -11,6 +11,23 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+const STOP_WORDS = new Set([
+  'de', 'la', 'que', 'el', 'en', 'y', 'a', 'los', 'un', 'una', 'unos', 'unas', 
+  'con', 'para', 'este', 'esta', 'como', 'o', 'u', 'del', 'al', 'por', 'sus', 
+  'tus', 'mis', 'su', 'tu', 'mi', 'deben', 'tienen', 'tiene', 'tengo', 'hay', 
+  'es', 'son', 'las', 'cual', 'cuales'
+]);
+
+function cleanText(text) {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¿?\!¡,\.;:\(\)\[\]"]/g, " ")
+    .trim();
+}
+
 // Configuración de la conexión a tu MySQL local
 // Modifica los campos 'user' y 'password' según la configuración de tu motor MySQL local.
 const db = mysql.createConnection({
@@ -57,24 +74,25 @@ app.get('/api/b2c/products', (req, res) => {
   }
 
   // Caso 3: Búsqueda dinámica con relevancia y tags
-  const words = query.split(/\s+/).filter(w => w.length > 2);
-  
-  // Consulta base SQL con cálculo inicial de score de relevancia en base a coincidencias de texto
-  const sql = `
-    SELECT p.*, 
-           (CASE WHEN LOWER(p.name) LIKE ? THEN 10 ELSE 0 END +
-            CASE WHEN LOWER(p.category) LIKE ? THEN 8 ELSE 0 END) AS sql_score
-    FROM b2c_products p
-  `;
-  const likeQuery = `%${query}%`;
-  
-  db.query(sql, [likeQuery, likeQuery], (err, results) => {
+  const cleanedQuery = cleanText(query);
+  const words = cleanedQuery.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
+
+  // Si después de limpiar no quedan palabras, retornar todo
+  if (words.length === 0) {
+    db.query('SELECT * FROM b2c_products', (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      const products = results.map(p => formatB2CProduct(p));
+      return res.json({ products });
+    });
+    return;
+  }
+
+  db.query('SELECT * FROM b2c_products', (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    // Recuperamos los tags de cada producto para enriquecer el score
     db.query('SELECT * FROM b2c_product_tags', (err, tagResults) => {
       if (err) return res.status(500).json({ error: err.message });
-      
+
       // Agrupar tags por product_id
       const tagsMap = {};
       tagResults.forEach(row => {
@@ -82,25 +100,51 @@ app.get('/api/b2c/products', (req, res) => {
         tagsMap[row.product_id].push(row.tag);
       });
 
-      // Calcular score final del lado del servidor Node.js
       let productsWithScore = results.map(p => {
         let product = formatB2CProduct(p);
         product.tags = tagsMap[p.id] || [];
-        
-        let score = p.sql_score;
-        // Puntuación por palabras individuales
+
+        let score = 0;
+        const cleanCategory = cleanText(product.category);
+
         words.forEach(word => {
-          if (product.tags.some(tag => tag === word || tag.includes(word))) {
-            score += 3;
+          // 1. Coincidencia de Categoría
+          if (cleanCategory === word) {
+            score += 8;
+          } else if (cleanCategory.includes(word) || word.includes(cleanCategory)) {
+            score += 4;
           }
-          if (product.name.toLowerCase().includes(word)) {
-            score += 2;
+
+          // 2. Coincidencia de Tags
+          if (product.tags) {
+            product.tags.forEach(tag => {
+              const cleanTag = cleanText(tag);
+              if (cleanTag === word) {
+                score += 5;
+              } else if (cleanTag.includes(word) || word.includes(cleanTag)) {
+                score += 3;
+              }
+            });
           }
-          if (product.description && product.description.toLowerCase().includes(word)) {
+
+          // 3. Coincidencia de Nombre (por palabras individuales del nombre)
+          const cleanName = cleanText(product.name);
+          const nameWords = cleanName.split(/\s+/).filter(w => w.length > 2);
+          nameWords.forEach(nw => {
+            if (nw === word) {
+              score += 4;
+            } else if (nw.includes(word) || word.includes(nw)) {
+              score += 2;
+            }
+          });
+
+          // 4. Coincidencia de Descripción
+          const cleanDesc = cleanText(product.description);
+          if (cleanDesc.includes(word)) {
             score += 1;
           }
         });
-        
+
         return { product, score };
       });
 
@@ -115,7 +159,7 @@ app.get('/api/b2c/products', (req, res) => {
       // Ordenar por relevancia descendente
       filtered.sort((a, b) => b.score - a.score);
 
-      // Enviar resultados limpios
+      // Enviar resultados
       res.json({ products: filtered.map(item => item.product) });
     });
   });
@@ -200,6 +244,10 @@ function formatB2CProduct(p) {
   if (p.rango_temp) specs.rango_temp = p.rango_temp;
   if (p.forma) specs.forma = p.forma;
   if (p.relleno) specs.relleno = p.relleno;
+  if (p.compresion) specs.compresion = p.compresion;
+  if (p.cintura) specs.cintura = p.cintura;
+  if (p.aislacion) specs.aislacion = p.aislacion;
+  if (p.tapa) specs.tapa = p.tapa;
 
   return {
     id: p.id,

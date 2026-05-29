@@ -9,6 +9,23 @@ const DEFAULT_ORDERS = [
 const USE_LOCAL_DB = true; // Cambiar a true para conectarse a tu MySQL local
 const LOCAL_DB_PORT = 3306; // Puerto de tu MySQL local (cambiar a 3310 si el instalador usó ese)
 
+const STOP_WORDS = new Set([
+  'de', 'la', 'que', 'el', 'en', 'y', 'a', 'los', 'un', 'una', 'unos', 'unas', 
+  'con', 'para', 'este', 'esta', 'como', 'o', 'u', 'del', 'al', 'por', 'sus', 
+  'tus', 'mis', 'su', 'tu', 'mi', 'deben', 'tienen', 'tiene', 'tengo', 'hay', 
+  'es', 'son', 'las', 'cual', 'cuales'
+]);
+
+function cleanText(text) {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¿?\!¡,\.;:\(\)\[\]"]/g, " ")
+    .trim();
+}
+
 // Estado Global de la Simulación
 let state = {
   currentMode: 'b2c',
@@ -60,9 +77,8 @@ const WELCOME_MESSAGES = {
   b2b: `Estimado socio corporativo, bienvenido al canal de <strong>Cotización Inteligente B2B</strong>. <br><br>Estoy autorizado para realizar consultas en ERP, verificar niveles de contrato en CRM y **negociar precios de volumen con aprobación inmediata**. ¿Qué productos y cantidades desea cotizar hoy?`
 };
 
-// Al iniciar la página
-document.addEventListener("DOMContentLoaded", () => {
-  initApp();
+document.addEventListener("DOMContentLoaded", async () => {
+  await initApp();
 
   // Re-ajustar canvas al cambiar tamaño de pantalla
   window.addEventListener("resize", () => {
@@ -73,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-function initApp() {
+async function initApp() {
   // Cargar órdenes de localStorage o inicializar con las default
   const storedOrders = localStorage.getItem('baufest_sim_orders');
   if (storedOrders) {
@@ -87,6 +103,28 @@ function initApp() {
   } else {
     state.orders = [...DEFAULT_ORDERS];
     localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
+  }
+
+  if (USE_LOCAL_DB) {
+    try {
+      // Registrar traza inicial para la sincronización B2B
+      addTrace('consulta', 'Conectando Base de Datos', 'Precargando datos B2B desde base de datos local...');
+      const prodRes = await fetch('http://localhost:3000/api/b2b/products');
+      const prodData = await prodRes.json();
+      if (prodData && prodData.products && prodData.products.length > 0) {
+        window.Catalog.b2bProducts = prodData.products;
+      }
+      
+      const clientRes = await fetch('http://localhost:3000/api/b2b/clients');
+      const clientData = await clientRes.json();
+      if (clientData && clientData.clients) {
+        window.Catalog.b2bClients = clientData.clients;
+      }
+      addTrace('consulta', 'Base de Datos Sincronizada', 'Catálogo B2B y CRM de clientes sincronizados con MySQL.');
+    } catch (e) {
+      console.error("Error al precargar datos B2B desde local:", e);
+      addTrace('alerta', 'Fallo Sincronización', 'No se pudieron precargar datos B2B. Usando datos mock en memoria.');
+    }
   }
 
   switchMode('b2c');
@@ -314,7 +352,12 @@ async function handleB2CInput(text) {
       try {
         const response = await fetch(`http://localhost:3000/api/b2c/products`);
         const data = await response.json();
-        productsList = data.products;
+        if (data && data.products && data.products.length > 0) {
+          productsList = data.products;
+        } else {
+          console.warn("El catálogo de la base de datos local está vacío. Usando catálogo mock.");
+          productsList = window.Catalog.b2cProducts;
+        }
       } catch (e) {
         console.error("Falló la conexión al backend de base de datos local:", e);
         productsList = window.Catalog.b2cProducts;
@@ -448,7 +491,11 @@ async function searchB2CProducts(query, maxPrice = null) {
       if (maxPrice !== null) url += `&max_price=${maxPrice}`;
       const response = await fetch(url);
       const data = await response.json();
-      return data.products;
+      if (data && Array.isArray(data.products)) {
+        return data.products;
+      } else {
+        console.warn("Respuesta de API inválida en búsqueda local. Usando catálogo en memoria.");
+      }
     } catch (e) {
       console.error("Falló la conexión al backend de base de datos local:", e);
       addTrace('alerta', 'Error Base de Datos', 'No se pudo conectar al backend MySQL local. Usando catálogo en memoria.');
@@ -456,42 +503,65 @@ async function searchB2CProducts(query, maxPrice = null) {
   }
 
   // Búsqueda local en memoria
-  const words = query.split(/\s+/).filter(w => w.length > 2);
+  const cleanedQuery = cleanText(query);
+  const words = cleanedQuery.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
   let matches = [];
 
-  window.Catalog.b2cProducts.forEach(product => {
-    let score = 0;
-    
-    // Coincidencia exacta de nombre (peso alto)
-    if (product.name.toLowerCase().includes(query)) {
-      score += 10;
+  // Si no hay palabras clave de búsqueda válidas después de limpiar
+  if (words.length === 0) {
+    if (maxPrice !== null) {
+      window.Catalog.b2cProducts.forEach(p => {
+        matches.push({ product: p, score: 1 });
+      });
     }
-    
-    // Coincidencia exacta de categoría (peso alto)
-    if (product.category.toLowerCase().includes(query) || query.includes(product.category.toLowerCase())) {
-      score += 8;
-    }
+  } else {
+    window.Catalog.b2cProducts.forEach(product => {
+      let score = 0;
+      const cleanCategory = cleanText(product.category);
 
-    // Coincidencias individuales de palabras
-    words.forEach(word => {
-      // Coincidencia en tags
-      if (product.tags && product.tags.some(tag => tag === word || tag.includes(word))) {
-        score += 3;
-      }
-      // Coincidencia en nombre
-      if (product.name.toLowerCase().includes(word)) {
-        score += 2;
-      }
-      // Coincidencia en descripción
-      if (product.description.toLowerCase().includes(word)) {
-        score += 1;
+      words.forEach(word => {
+        // 1. Coincidencia de Categoría
+        if (cleanCategory === word) {
+          score += 8;
+        } else if (cleanCategory.includes(word) || word.includes(cleanCategory)) {
+          score += 4;
+        }
+
+        // 2. Coincidencia de Tags
+        if (product.tags) {
+          product.tags.forEach(tag => {
+            const cleanTag = cleanText(tag);
+            if (cleanTag === word) {
+              score += 5;
+            } else if (cleanTag.includes(word) || word.includes(cleanTag)) {
+              score += 3;
+            }
+          });
+        }
+
+        // 3. Coincidencia de Nombre
+        const cleanName = cleanText(product.name);
+        const nameWords = cleanName.split(/\s+/).filter(w => w.length > 2);
+        nameWords.forEach(nw => {
+          if (nw === word) {
+            score += 4;
+          } else if (nw.includes(word) || word.includes(nw)) {
+            score += 2;
+          }
+        });
+
+        // 4. Coincidencia de Descripción
+        const cleanDesc = cleanText(product.description);
+        if (cleanDesc.includes(word)) {
+          score += 1;
+        }
+      });
+
+      if (score > 0) {
+        matches.push({ product, score });
       }
     });
-
-    if (score > 0) {
-      matches.push({ product, score });
-    }
-  });
+  }
 
   // Si no hay palabras de búsqueda pero sí hay presupuesto, usar todo el catálogo
   if (matches.length === 0 && maxPrice !== null) {
