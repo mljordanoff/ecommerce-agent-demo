@@ -6,6 +6,9 @@ const DEFAULT_ORDERS = [
   { id: "ORD-10494", time: "Hoy 10:02", channel: "B2C", client: "m.rodriguez@gmail.com", email: "m.rodriguez@gmail.com", items: "1x UltraBoost Nova 2026", total: 180.00, status: "Facturado" }
 ];
 
+const USE_LOCAL_DB = true; // Cambiar a true para conectarse a tu MySQL local
+const LOCAL_DB_PORT = 3306; // Puerto de tu MySQL local (cambiar a 3310 si el instalador usó ese)
+
 // Estado Global de la Simulación
 let state = {
   currentMode: 'b2c',
@@ -276,7 +279,7 @@ function addTrace(type, title, body) {
 // -------------------------------------------------------------
 // MOTOR DE DIÁLOGO B2C (Minorista)
 // -------------------------------------------------------------
-function handleB2CInput(text) {
+async function handleB2CInput(text) {
   const query = text.toLowerCase().trim();
   
   addTrace('interpreta', 'NLP - Interpreta Intención', `Analizando consulta de usuario: "${text}"`);
@@ -305,6 +308,21 @@ function handleB2CInput(text) {
   // 4. Ver catálogo completo
   if (query.includes('catalogo') || query.includes('productos') || query.includes('que tenes') || query.includes('que venden') || query.includes('lista')) {
     addTrace('consulta', 'Consulta Catálogo Completo', 'Listando todos los productos B2C de la base de datos.');
+    
+    let productsList = [];
+    if (USE_LOCAL_DB) {
+      try {
+        const response = await fetch(`http://localhost:3000/api/b2c/products`);
+        const data = await response.json();
+        productsList = data.products;
+      } catch (e) {
+        console.error("Falló la conexión al backend de base de datos local:", e);
+        productsList = window.Catalog.b2cProducts;
+      }
+    } else {
+      productsList = window.Catalog.b2cProducts;
+    }
+
     let html = `<p>Actualmente tengo los siguientes productos en oferta minorista B2C:</p>
       <div style="max-height: 200px; overflow-y: auto; margin-top: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; background: rgba(0,0,0,0.15);">
       <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;">
@@ -317,7 +335,7 @@ function handleB2CInput(text) {
         </thead>
         <tbody>`;
     
-    window.Catalog.b2cProducts.forEach(p => {
+    productsList.forEach(p => {
       html += `<tr style="border-bottom: 1px dashed rgba(255,255,255,0.03);">
         <td style="padding: 0.4rem; color: var(--text-secondary);">${p.category}</td>
         <td style="padding: 0.4rem; font-weight: 500;">${p.name}</td>
@@ -345,15 +363,7 @@ function handleB2CInput(text) {
     addTrace('interpreta', 'Filtro de Presupuesto', `Detectado límite de precio: $${maxPrice} USD`);
   }
 
-  let matchedProducts = searchB2CProducts(query);
-
-  if (maxPrice !== null) {
-    if (matchedProducts.length > 0) {
-      matchedProducts = matchedProducts.filter(p => p.price <= maxPrice);
-    } else {
-      matchedProducts = window.Catalog.b2cProducts.filter(p => p.price <= maxPrice);
-    }
-  }
+  let matchedProducts = await searchB2CProducts(query, maxPrice);
 
   // 7. Renderizar Respuestas
   if (matchedProducts.length === 0) {
@@ -431,7 +441,21 @@ function handleB2CInput(text) {
 }
 
 // Buscar productos B2C de manera dinámica basándose en keywords/tags de la consulta
-function searchB2CProducts(query) {
+async function searchB2CProducts(query, maxPrice = null) {
+  if (USE_LOCAL_DB) {
+    try {
+      let url = `http://localhost:3000/api/b2c/products?q=${encodeURIComponent(query)}`;
+      if (maxPrice !== null) url += `&max_price=${maxPrice}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      return data.products;
+    } catch (e) {
+      console.error("Falló la conexión al backend de base de datos local:", e);
+      addTrace('alerta', 'Error Base de Datos', 'No se pudo conectar al backend MySQL local. Usando catálogo en memoria.');
+    }
+  }
+
+  // Búsqueda local en memoria
   const words = query.split(/\s+/).filter(w => w.length > 2);
   let matches = [];
 
@@ -469,9 +493,22 @@ function searchB2CProducts(query) {
     }
   });
 
+  // Si no hay palabras de búsqueda pero sí hay presupuesto, usar todo el catálogo
+  if (matches.length === 0 && maxPrice !== null) {
+    window.Catalog.b2cProducts.forEach(p => {
+      matches.push({ product: p, score: 1 });
+    });
+  }
+
+  // Filtrar por precio máximo localmente
+  let result = matches.map(m => m.product);
+  if (maxPrice !== null) {
+    result = result.filter(p => p.price <= maxPrice);
+  }
+
   // Ordenar por score descendente
   matches.sort((a, b) => b.score - a.score);
-  return matches.map(m => m.product);
+  return matches.map(m => m.product).filter(p => result.includes(p));
 }
 
 // Simular agregado al carrito B2C y desglose
