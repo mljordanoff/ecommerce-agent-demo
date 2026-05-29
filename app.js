@@ -26,6 +26,13 @@ function cleanText(text) {
     .trim();
 }
 
+const CATEGORY_KEYWORDS = {
+  'Zapatillas': ['zapatilla', 'zapatillas', 'calzado', 'calzados', 'zapato', 'zapatos', 'tenis', 'gym', 'gimnasio'],
+  'Indumentaria': ['campera', 'camperas', 'remera', 'remeras', 'calza', 'calzas', 'leggings', 'ropa', 'abrigo', 'abrigos', 'indumentaria', 'vestir'],
+  'Accesorios': ['reloj', 'relojes', 'smartband', 'band', 'auricular', 'auriculares', 'audifono', 'audifonos', 'tecnologia', 'smartwatch'],
+  'Equipamiento': ['mochila', 'mochilas', 'termo', 'termos', 'botella', 'botellas', 'bolsa de dormir', 'sleeping', 'saco de dormir', 'sacos de dormir', 'equipamiento', 'camping', 'outdoor']
+};
+
 // Estado Global de la Simulación
 let state = {
   currentMode: 'b2c',
@@ -568,6 +575,17 @@ async function searchB2CProducts(query, maxPrice = null) {
     window.Catalog.b2cProducts.forEach(p => {
       matches.push({ product: p, score: 1 });
     });
+  }
+
+  // Filtrar por categoría explícitamente solicitada
+  const requestedCategories = [];
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(keyword => cleanedQuery.includes(keyword))) {
+      requestedCategories.push(category);
+    }
+  }
+  if (requestedCategories.length === 1) {
+    matches = matches.filter(item => item.product.category === requestedCategories[0]);
   }
 
   // Filtrar por precio máximo localmente

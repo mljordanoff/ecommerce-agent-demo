@@ -28,6 +28,13 @@ function cleanText(text) {
     .trim();
 }
 
+const CATEGORY_KEYWORDS = {
+  'Zapatillas': ['zapatilla', 'zapatillas', 'calzado', 'calzados', 'zapato', 'zapatos', 'tenis', 'gym', 'gimnasio'],
+  'Indumentaria': ['campera', 'camperas', 'remera', 'remeras', 'calza', 'calzas', 'leggings', 'ropa', 'abrigo', 'abrigos', 'indumentaria', 'vestir'],
+  'Accesorios': ['reloj', 'relojes', 'smartband', 'band', 'auricular', 'auriculares', 'audifono', 'audifonos', 'tecnologia', 'smartwatch'],
+  'Equipamiento': ['mochila', 'mochilas', 'termo', 'termos', 'botella', 'botellas', 'bolsa de dormir', 'sleeping', 'saco de dormir', 'sacos de dormir', 'equipamiento', 'camping', 'outdoor']
+};
+
 // Configuración de la conexión a tu MySQL local
 // Modifica los campos 'user' y 'password' según la configuración de tu motor MySQL local.
 const db = mysql.createConnection({
@@ -150,6 +157,17 @@ app.get('/api/b2c/products', (req, res) => {
 
       // Filtrar aquellos productos que tengan al menos una coincidencia (score > 0)
       let filtered = productsWithScore.filter(item => item.score > 0);
+
+      // Filtrar por categoría explícitamente solicitada
+      const requestedCategories = [];
+      for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+        if (keywords.some(keyword => cleanedQuery.includes(keyword))) {
+          requestedCategories.push(category);
+        }
+      }
+      if (requestedCategories.length === 1) {
+        filtered = filtered.filter(item => item.product.category === requestedCategories[0]);
+      }
 
       // Aplicar filtro de presupuesto
       if (maxPrice !== null) {
