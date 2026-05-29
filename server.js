@@ -236,6 +236,41 @@ app.get('/api/b2b/clients', (req, res) => {
   });
 });
 
+// 4. Endpoint para obtener todas las órdenes / transacciones
+app.get('/api/orders', (req, res) => {
+  db.query('SELECT * FROM orders ORDER BY id DESC', (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const orders = results.map(o => ({
+      id: o.id,
+      time: o.time,
+      channel: o.channel,
+      client: o.client,
+      email: o.email,
+      items: o.items,
+      total: parseFloat(o.total),
+      status: o.status
+    }));
+    res.json({ orders });
+  });
+});
+
+// 5. Endpoint para registrar una nueva orden / transacción
+app.post('/api/orders', (req, res) => {
+  const { id, time, channel, client, email, items, total, status } = req.body;
+  
+  if (!id || !time || !channel || !client || !items || total === undefined || !status) {
+    return res.status(400).json({ error: "Faltan campos obligatorios para registrar la orden." });
+  }
+
+  const sql = 'INSERT INTO orders (id, time, channel, client, email, items, total, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+  const params = [id, time, channel, client, email || null, items, total, status];
+
+  db.query(sql, params, (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({ success: true, orderId: id });
+  });
+});
+
 // Helper para convertir base de datos plana a estructura con objeto specs anidado
 function formatB2CProduct(p) {
   const specs = {};

@@ -97,40 +97,46 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 async function initApp() {
-  // Cargar órdenes de localStorage o inicializar con las default
+  // Cargar de localStorage inicialmente como respaldo
   const storedOrders = localStorage.getItem('baufest_sim_orders');
   if (storedOrders) {
     try {
       state.orders = JSON.parse(storedOrders);
     } catch (e) {
-      console.error("Error al decodificar órdenes guardadas, usando por defecto.", e);
       state.orders = [...DEFAULT_ORDERS];
-      localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
     }
   } else {
     state.orders = [...DEFAULT_ORDERS];
-    localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
   }
 
   if (USE_LOCAL_DB) {
     try {
-      // Registrar traza inicial para la sincronización B2B
-      addTrace('consulta', 'Conectando Base de Datos', 'Precargando datos B2B desde base de datos local...');
+      addTrace('consulta', 'Conectando Base de Datos', 'Precargando catálogo B2B, CRM y transacciones de MySQL local...');
+      
+      // 1. Cargar Órdenes / Transacciones
+      const orderRes = await fetch('http://localhost:3000/api/orders');
+      const orderData = await orderRes.json();
+      if (orderData && orderData.orders && orderData.orders.length > 0) {
+        state.orders = orderData.orders;
+      }
+
+      // 2. Cargar Catálogo B2B
       const prodRes = await fetch('http://localhost:3000/api/b2b/products');
       const prodData = await prodRes.json();
       if (prodData && prodData.products && prodData.products.length > 0) {
         window.Catalog.b2bProducts = prodData.products;
       }
       
+      // 3. Cargar CRM de Clientes B2B
       const clientRes = await fetch('http://localhost:3000/api/b2b/clients');
       const clientData = await clientRes.json();
       if (clientData && clientData.clients) {
         window.Catalog.b2bClients = clientData.clients;
       }
-      addTrace('consulta', 'Base de Datos Sincronizada', 'Catálogo B2B y CRM de clientes sincronizados con MySQL.');
+      addTrace('consulta', 'Base de Datos Sincronizada', 'Catálogo B2B, CRM de clientes e historial de transacciones sincronizados con MySQL.');
     } catch (e) {
-      console.error("Error al precargar datos B2B desde local:", e);
-      addTrace('alerta', 'Fallo Sincronización', 'No se pudieron precargar datos B2B. Usando datos mock en memoria.');
+      console.error("Error al precargar datos desde local:", e);
+      addTrace('alerta', 'Fallo Sincronización', 'No se pudieron precargar datos de base de datos. Usando datos de respaldo.');
     }
   }
 
@@ -1424,13 +1430,12 @@ function updateCFOkpis(newKpis) {
 // =============================================================
 
 // Registrar una nueva orden en la base de datos
-function registerOrder(channel, client, items, total, status = "Facturado", idPrefix = "ORD", email = "") {
+async function registerOrder(channel, client, items, total, status = "Facturado", idPrefix = "ORD", email = "") {
   const orderId = `${idPrefix}-${Math.floor(10500 + Math.random() * 9000)}`;
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
   
-  // Agregar al inicio del arreglo
-  state.orders.unshift({
+  const orderObj = {
     id: orderId,
     time: `Hoy ${timeStr}`,
     channel: channel,
@@ -1440,13 +1445,36 @@ function registerOrder(channel, client, items, total, status = "Facturado", idPr
     total: total,
     status: status,
     isNew: true // Flag para activar la animación de resalte
-  });
+  };
+
+  // Agregar al inicio del arreglo
+  state.orders.unshift(orderObj);
 
   // Guardar en localStorage
   localStorage.setItem('baufest_sim_orders', JSON.stringify(state.orders));
 
   renderOrdersTable();
-  addTrace('ejecuta', 'Base de Datos (ERP)', `Registro ID ${orderId} escrito en la Base de Datos transaccional.`);
+
+  if (USE_LOCAL_DB) {
+    try {
+      const response = await fetch('http://localhost:3000/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(orderObj)
+      });
+      if (response.ok) {
+        addTrace('ejecuta', 'Base de Datos (MySQL)', `Registro ID ${orderId} escrito en la Base de Datos MySQL real.`);
+      } else {
+        console.error("Falló el guardado de orden en la base de datos MySQL:", response.statusText);
+      }
+    } catch (e) {
+      console.error("Error al registrar orden en MySQL local:", e);
+    }
+  } else {
+    addTrace('ejecuta', 'Base de Datos (ERP)', `Registro ID ${orderId} escrito en la Base de Datos transaccional.`);
+  }
 }
 
 // Renderizar la tabla de órdenes
